@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+  <id>nenb.github.io</id>
+  <title>Nick Byrne's Blog</title>
+  <updated>2023-02-12T17:06:03.722472+00:00</updated>
+  <link href="nenb.github.io"/>
+  <link href="nenb.github.io/blog/atom.xml" rel="self"/>
+  <generator uri="https://ablog.readthedocs.org/" version="0.10.33">ABlog</generator>
+  <entry>
+    <id>nenb.github.io/blog/article.html</id>
+    <title>Title</title>
+    <updated>1970-01-01T00:00:00+00:00</updated>
+    <author>
+      <name>Nick Byrne</name>
+    </author>
+    <content type="html">&lt;section id="article"&gt;
+
+&lt;p&gt;Content&lt;/p&gt;
+&lt;/section&gt;
+</content>
+    <link href="nenb.github.io/blog/article.html" rel="alternate"/>
+    <summary>Content</summary>
+    <published>1970-01-01T00:00:00+00:00</published>
+  </entry>
+</feed>
