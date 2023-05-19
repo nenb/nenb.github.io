@@ -1,0 +1,633 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+<meta property="og:title" content="Fragile Tests" />
+  
+<meta property="og:type" content="website" />
+  
+<meta property="og:url" content="blog/fragile_tests.html" />
+  
+<meta property="og:description" content="( Inspired by a tweet from Hynek Schlawack) Why do we test?: To check the correctness of our code, To document how our code should be used, To make maintaining and refactoring our code easier. Ther..." />
+  
+<meta property="og:image" content="nenb.github.io/_static/profile.jpg" />
+  
+<meta property="og:image:alt" content="Fragile Tests" />
+  
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=796348d33e8b1d947c94" rel="stylesheet">
+<link href="../_static/styles/bootstrap.css?digest=796348d33e8b1d947c94" rel="stylesheet">
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=796348d33e8b1d947c94" rel="stylesheet">
+
+  
+  <link href="../_static/vendor/fontawesome/6.1.2/css/all.min.css?digest=796348d33e8b1d947c94" rel="stylesheet">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-solid-900.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-brands-400.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-regular-400.woff2">
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-dropdown.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/panels-bootstrap.min.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=796348d33e8b1d947c94">
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=796348d33e8b1d947c94">
+
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/sphinx_highlight.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'blog/fragile_tests';</script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="docsearch:language" content="en"> 
+<link
+  rel="alternate"
+  type="application/atom+xml"
+  href="../blog/atom.xml"
+  title="Nick Byrne's Blog"
+/>
+ 
+<style type="text/css">
+  ul.ablog-archive {
+    list-style: none;
+    overflow: auto;
+    margin-left: 0px;
+  }
+  ul.ablog-archive li {
+    float: left;
+    margin-right: 5px;
+    font-size: 80%;
+  }
+  ul.postlist a {
+    font-style: italic;
+  }
+  ul.postlist-style-disc {
+    list-style-type: disc;
+  }
+  ul.postlist-style-none {
+    list-style-type: none;
+  }
+  ul.postlist-style-circle {
+    list-style-type: circle;
+  }
+</style>
+
+  </head>
+  
+  
+  <body data-spy="scroll" data-target="#bd-toc-nav" data-offset="180" data-default-mode="">
+
+  
+  
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  
+  <input type="checkbox" class="sidebar-toggle" name="__primary" id="__primary">
+  <label class="overlay overlay-primary" for="__primary"></label>
+
+  
+  <input type="checkbox" class="sidebar-toggle" name="__secondary" id="__secondary">
+  <label class="overlay overlay-secondary" for="__secondary"></label>
+
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+      
+<form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" class="form-control" name="q" id="search-input" placeholder="Search ..." aria-label="Search ..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+    </div>
+  </div>
+
+  
+  <nav class="bd-header navbar navbar-expand-lg bd-navbar" id="navbar-main"><div class="bd-header__inner bd-page-width">
+  <label class="sidebar-toggle primary-toggle" for="__primary">
+      <span class="fa-solid fa-bars"></span>
+  </label>
+  <div id="navbar-start">
+    
+    
+  
+
+
+<a class="navbar-brand logo" href="../index.html">
+
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+    <p class="title logo__title">Nick Byrne</p>
+  
+</a>
+    
+  </div>
+
+  
+  <div class="col-lg-9 navbar-header-items">
+    <div id="navbar-center" class="mr-auto">
+      
+      <div class="navbar-center-item">
+        <nav class="navbar-nav">
+    <p class="sidebar-header-items__title" role="heading" aria-level="1" aria-label="Site Navigation">
+        Site Navigation
+    </p>
+    <ul id="navbar-main-elements" class="navbar-nav">
+        
+    </ul>
+</nav>
+      </div>
+      
+    </div>
+
+    <div id="navbar-end">
+      
+        <div class="navbar-end-item navbar-persistent--container">
+          
+<button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-toggle="tooltip">
+  <i class="fa-solid fa-magnifying-glass"></i>
+</button>
+        </div>
+      
+      
+      <div class="navbar-end-item">
+        
+<form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" class="form-control" name="q" id="search-input" placeholder="Search ..." aria-label="Search ..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+      </div>
+      
+      <div class="navbar-end-item">
+        <button class="theme-switch-button btn btn-sm btn-outline-primary navbar-btn rounded-circle" title="light/dark" aria-label="light/dark" data-toggle="tooltip">
+    <span class="theme-switch" data-mode="light"><i class="fa-solid fa-sun"></i></span>
+    <span class="theme-switch" data-mode="dark"><i class="fa-solid fa-moon"></i></span>
+    <span class="theme-switch" data-mode="auto"><i class="fa-solid fa-circle-half-stroke"></i></span>
+</button>
+      </div>
+      
+      <div class="navbar-end-item">
+        <ul id="navbar-icon-links" class="navbar-nav" aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/nenb/" title="GitHub" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-square-github"></i></span>
+            <label class="sr-only">GitHub</label></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://twitter.com/_nenb" title="Twitter" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-square-twitter"></i></span>
+            <label class="sr-only">Twitter</label></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://mastodon.top/@nenb" title="Mastodon" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-mastodon"></i></span>
+            <label class="sr-only">Mastodon</label></a>
+        </li>
+      </ul>
+      </div>
+      
+    </div>
+  </div>
+
+
+  
+  
+    <div class="navbar-persistent--mobile">
+<button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-toggle="tooltip">
+  <i class="fa-solid fa-magnifying-glass"></i>
+</button>
+    </div>
+  
+
+  
+
+</div>
+  </nav>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+      
+      <div class="navbar-center-item">
+        <nav class="navbar-nav">
+    <p class="sidebar-header-items__title" role="heading" aria-level="1" aria-label="Site Navigation">
+        Site Navigation
+    </p>
+    <ul id="navbar-main-elements" class="navbar-nav">
+        
+    </ul>
+</nav>
+      </div>
+      
+      </div>
+    
+
+    
+    
+    <div class="sidebar-header-items__end">
+      
+      <div class="navbar-end-item">
+        
+<form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" class="form-control" name="q" id="search-input" placeholder="Search ..." aria-label="Search ..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+      </div>
+      
+      <div class="navbar-end-item">
+        <button class="theme-switch-button btn btn-sm btn-outline-primary navbar-btn rounded-circle" title="light/dark" aria-label="light/dark" data-toggle="tooltip">
+    <span class="theme-switch" data-mode="light"><i class="fa-solid fa-sun"></i></span>
+    <span class="theme-switch" data-mode="dark"><i class="fa-solid fa-moon"></i></span>
+    <span class="theme-switch" data-mode="auto"><i class="fa-solid fa-circle-half-stroke"></i></span>
+</button>
+      </div>
+      
+      <div class="navbar-end-item">
+        <ul id="navbar-icon-links" class="navbar-nav" aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/nenb/" title="GitHub" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-square-github"></i></span>
+            <label class="sr-only">GitHub</label></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://twitter.com/_nenb" title="Twitter" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-square-twitter"></i></span>
+            <label class="sr-only">Twitter</label></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://mastodon.top/@nenb" title="Mastodon" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-mastodon"></i></span>
+            <label class="sr-only">Mastodon</label></a>
+        </li>
+      </ul>
+      </div>
+      
+    </div>
+    
+  </div>
+
+  
+  <div class="sidebar-start-items sidebar-primary__section">
+    <div class="sidebar-start-items__item"><div class="profile-pic"><img src="../_static/profile.png" /></div>
+
+<div class="bio-info">
+    <div class="name">
+        Nick Byrne
+    </div>
+    <div class="focusareas">
+        Senior Software Engineer <a href="https://cervest.earth/">@CervestEarth</a>
+    </div>
+</div>
+    </div>
+  </div>
+  
+
+  
+  <div class="sidebar-end-items sidebar-primary__section">
+    <div class="sidebar-end-items__item">
+    </div>
+  </div>
+
+  
+  <div id="rtd-footer-container"></div>
+
+      </div>
+      <main id="main-content" class="bd-main">
+        
+        
+        <div class="bd-content">
+          <div class="bd-article-container">
+            
+            <div class="bd-header-article">
+                
+            </div>
+            
+            
+
+
+            <article class="bd-article" role="main">
+               <section id="fragile-tests">
+<h1>Fragile Tests<a class="headerlink" href="#fragile-tests" title="Permalink to this heading">#</a></h1>
+<p>(<em>Inspired by a <a class="reference external" href="https://twitter.com/hynek/status/1172034561959706624">tweet</a> from Hynek Schlawack</em>)</p>
+<section id="why-do-we-test">
+<h2>Why do we test?<a class="headerlink" href="#why-do-we-test" title="Permalink to this heading">#</a></h2>
+<ul class="simple">
+<li><p>To check the correctness of our code</p></li>
+<li><p>To document how our code should be used</p></li>
+<li><p>To make maintaining and refactoring our code easier</p></li>
+</ul>
+<p>There are many other valid reasons. But these three points are what I find myself continually coming back to.</p>
+</section>
+<section id="why-do-we-not-test">
+<h2>Why do we <em>not</em> test?<a class="headerlink" href="#why-do-we-not-test" title="Permalink to this heading">#</a></h2>
+<p>I’ll probably get a different answer to this question depending on the project that I’m working on. <em>Fragile tests</em> is a reason I hear a lot though. I’m going to adopt a loose definition of test fragility here and define it as ‘tests that are easily broken by code changes’. Writing tests that rely on the implementation details of your code is a sure-fire way to end up with fragile tests.</p>
+<p>In the Python world, I find the <code class="docutils literal notranslate"><span class="pre">patch</span></code> decorator from the <code class="docutils literal notranslate"><span class="pre">unittest</span></code> library often leads to implementation-aware tests. <code class="docutils literal notranslate"><span class="pre">patch</span></code> is popular because it means less work in the test setup phase, but in my experience it’s usually at the cost of introducing fragile tests to your test suite.</p>
+</section>
+<section id="an-example">
+<h2>An example<a class="headerlink" href="#an-example" title="Permalink to this heading">#</a></h2>
+<p>Talking about tests is difficult because so much of the terminology is overloaded. Martin Fowler’s <a class="reference external" href="https://martinfowler.com/articles/mocksArentStubs.html">classic article</a> is helpful for cutting through the noise. Martin identifies two approaches to testing: <em>state verification</em> and <em>behaviour verification</em>. By its very nature, behaviour verification is more closely coupled to implementation details than state verification. But it often requires far less preparation work - test fixtures are often much simpler or non-existent. We can see this more clearly with an example.</p>
+<p>Let’s imagine an API for retrieving employee names and their job in a company:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># api.py</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Protocol</span>
+
+<span class="k">class</span> <span class="nc">EmployeeAPI</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">insert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">employee_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="o">...</span>
+    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">employee_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<p>Let’s also imagine a helper function <code class="docutils literal notranslate"><span class="pre">capitalise_employees_names</span></code>. A basic implementation might be:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">capitalise_employees_names</span><span class="p">(</span><span class="n">api</span><span class="p">:</span> <span class="n">EmployeeAPI</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">employees</span> <span class="o">=</span> <span class="n">api</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+    
+    <span class="k">for</span> <span class="n">employee</span><span class="p">,</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">employees</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">employee</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">employee</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">():</span>
+            <span class="n">api</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">employee</span><span class="p">)</span>
+            <span class="n">employee_capitalised</span> <span class="o">=</span> <span class="n">employee</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">+</span> <span class="n">employee</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="n">api</span><span class="o">.</span><span class="n">insert</span><span class="p">({</span><span class="n">employee_capitalised</span><span class="p">:</span> <span class="n">job</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>We can now ask the question: how do we test <code class="docutils literal notranslate"><span class="pre">capitalise_employees_names</span></code>?</p>
+<section id="state-verification">
+<h3>State verification<a class="headerlink" href="#state-verification" title="Permalink to this heading">#</a></h3>
+<p>Clearly it’s not reasonable to use the production <code class="docutils literal notranslate"><span class="pre">EmployeeAPI</span></code> in a test suite that might be run every day. Where exactly should the ‘state’ to be verified come from then? My preferred solution is to use a <a class="reference external" href="https://pythonspeed.com/articles/verified-fakes/">verified fake</a> (when possible). The gist of the idea is to design a test fixture that represents a simplified version of the original object to be tested. This fixture then acts as the single, authoritative version of this object in the test suite.</p>
+<p>Returning to our example, we might create our fake employee API using a Python <code class="docutils literal notranslate"><span class="pre">dict</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">FakeEmployeeAPI</span><span class="p">:</span>
+    <span class="s2">&quot;A simplified implementation of EmployeeAPI&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">employees</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_employees</span> <span class="o">=</span> <span class="n">employees</span>
+    
+    <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_employees</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    
+    <span class="k">def</span> <span class="nf">insert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">employee_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_employees</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">employee_info</span><span class="p">)</span>
+        
+    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">employee_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span>  <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_employees</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">employee_name</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now we are ready to write our test:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pytest</span>
+
+<span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span>
+<span class="k">def</span> <span class="nf">fake_api</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">FakeEmployeeAPI</span><span class="p">({</span><span class="s2">&quot;john&quot;</span><span class="p">:</span> <span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;Alice&quot;</span><span class="p">:</span> <span class="s2">&quot;legal&quot;</span><span class="p">})</span>
+
+<span class="k">def</span> <span class="nf">test_capitalise_employees_names</span><span class="p">(</span><span class="n">fake_api</span><span class="p">):</span>
+    <span class="n">capitalise_employees_names</span><span class="p">(</span><span class="n">fake_api</span><span class="p">)</span>
+    
+    <span class="n">employees</span> <span class="o">=</span> <span class="n">fake_api</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+    
+    <span class="k">assert</span> <span class="n">employees</span> <span class="o">==</span> <span class="p">{</span><span class="s2">&quot;John&quot;</span><span class="p">:</span> <span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;Alice&quot;</span><span class="p">:</span> <span class="s2">&quot;legal&quot;</span><span class="p">}</span>  <span class="c1"># state verification</span>
+</pre></div>
+</div>
+</section>
+<section id="behaviour-verification">
+<h3>Behaviour verification<a class="headerlink" href="#behaviour-verification" title="Permalink to this heading">#</a></h3>
+<p>With behaviour verification we don’t need to bother with writing any fake employee API. We can dive straight in to writing our test:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">unittest</span>
+
+<span class="kn">from</span> <span class="nn">unittest.mock</span> <span class="kn">import</span> <span class="n">patch</span>
+
+<span class="k">class</span> <span class="nc">TestEmployeeAPIHelperFunctions</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+    
+    <span class="nd">@patch</span><span class="p">(</span><span class="s1">&#39;api.EmployeeAPI&#39;</span><span class="p">,</span> <span class="n">autospec</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">test_capitalise_employees_names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mock_api</span><span class="p">):</span>
+        <span class="n">mock_api</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">return_value</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;john&quot;</span><span class="p">:</span> <span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;Alice&quot;</span><span class="p">:</span> <span class="s2">&quot;legal&quot;</span><span class="p">}</span>
+        <span class="n">capitalise_employees_names</span><span class="p">(</span><span class="n">mock_api</span><span class="p">)</span>
+
+        <span class="n">mock_api</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">assert_called_once</span><span class="p">()</span>  <span class="c1"># behaviour verification </span>
+        <span class="n">mock_api</span><span class="o">.</span><span class="n">delete</span><span class="o">.</span><span class="n">assert_called_once_with</span><span class="p">(</span><span class="s2">&quot;john&quot;</span><span class="p">)</span>  <span class="c1"># behaviour verification</span>
+        <span class="n">mock_api</span><span class="o">.</span><span class="n">insert</span><span class="o">.</span><span class="n">assert_called_once_with</span><span class="p">({</span><span class="s2">&quot;John&quot;</span><span class="p">:</span> <span class="s2">&quot;sales&quot;</span><span class="p">})</span>  <span class="c1"># behaviour verification</span>
+</pre></div>
+</div>
+<p>It’s far quicker to write this test compared to the previous test! The tradeoff is that our test is now more closely coupled to the implementation details and less readable.</p>
+</section>
+</section>
+<section id="an-inevitable-code-change">
+<h2>An inevitable code change<a class="headerlink" href="#an-inevitable-code-change" title="Permalink to this heading">#</a></h2>
+<p>After some time (and several incidents involving the loss of employee details…) the <code class="docutils literal notranslate"><span class="pre">EmployeeAPI</span></code> is extended with an <code class="docutils literal notranslate"><span class="pre">update</span></code> method:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">old_employee_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">new_employee_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">capitalise_employees_names</span></code> is also changed to take advantage of this improvement:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">capitalise_employees_names</span><span class="p">(</span><span class="n">api</span><span class="p">:</span> <span class="n">EmployeeAPI</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">employees</span> <span class="o">=</span> <span class="n">api</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+    
+    <span class="k">for</span> <span class="n">employee</span><span class="p">,</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">employees</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">employee</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">employee</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">():</span>
+            <span class="n">employee_capitalised</span> <span class="o">=</span> <span class="n">employee</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">+</span> <span class="n">employee</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="n">api</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">employee</span><span class="p">:</span> <span class="n">job</span><span class="p">},</span> <span class="p">{</span><span class="n">employee_capitalised</span><span class="p">:</span> <span class="n">job</span><span class="p">})</span>  <span class="c1"># all changes now in a single API call!</span>
+</pre></div>
+</div>
+<p>What does this mean for the tests?</p>
+<section id="id1">
+<h3>State verification<a class="headerlink" href="#id1" title="Permalink to this heading">#</a></h3>
+<p>When the state-verification test suite is run after the code change, an error should be raised indicating that the fake employee API is missing an <code class="docutils literal notranslate"><span class="pre">update</span></code> method. This error is straightforward to understand (the <code class="docutils literal notranslate"><span class="pre">EmployeeAPI</span></code> interface has just been updated after all) and in this example there is a straightforward addition to our fake employee API:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">old_employee_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">new_employee_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span>  <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">old_employee_name</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">old_employee_info</span><span class="o">.</span><span class="n">popitem</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_employees</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">old_employee_name</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_employees</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">new_employee_info</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>That’s it. No changes to the original test are required. And so long as our verified fake has an interface that matches the actual <code class="docutils literal notranslate"><span class="pre">EmployeeAPI</span></code>, it should not matter how many tests we have written - we should not need to modify any of them. We can continue to easily use the tests to have confidence in our code, even though we might not understand every detail of how our code was written.</p>
+</section>
+<section id="id2">
+<h3>Behaviour verification<a class="headerlink" href="#id2" title="Permalink to this heading">#</a></h3>
+<p>For our behaviour-verification test suite, the code change is more problematic. The test suite should fail, and it should state that the <code class="docutils literal notranslate"><span class="pre">delete</span></code> method was not called. The only way to fix the test suite is to compare the implementation details for the old and new versions of <code class="docutils literal notranslate"><span class="pre">capitalise_employees_names</span></code>, and to update the test accordingly. Of course, in this simple example the fixes are manageable:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">TestEmployeeAPIHelperFunctions</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+    
+    <span class="nd">@patch</span><span class="p">(</span><span class="s1">&#39;api.EmployeeAPI&#39;</span><span class="p">,</span> <span class="n">autospec</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">test_capitalise_employees_names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mock_api</span><span class="p">):</span>
+        <span class="n">mock_api</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">return_value</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;john&quot;</span><span class="p">:</span> <span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;Alice&quot;</span><span class="p">:</span> <span class="s2">&quot;legal&quot;</span><span class="p">}</span>
+        <span class="n">capitalise_employees_names</span><span class="p">(</span><span class="n">mock_api</span><span class="p">)</span>
+
+        <span class="n">mock_api</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">assert_called_once</span><span class="p">()</span>  <span class="c1"># behaviour verification </span>
+        <span class="n">mock_api</span><span class="o">.</span><span class="n">update</span><span class="o">.</span><span class="n">assert_called_once_with</span><span class="p">({</span><span class="s2">&quot;john&quot;</span><span class="p">:</span> <span class="s2">&quot;sales&quot;</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;John&quot;</span><span class="p">:</span> <span class="s2">&quot;sales&quot;</span><span class="p">})</span>  <span class="c1"># behaviour verification</span>
+</pre></div>
+</div>
+<p>But this approach <strong>does not scale well</strong> at all. Imagine a codebase with several such functions that have each been written by a different developer. The only way to fix the tests after a (perfectly valid) code change is to understand the implementation details of all functions and to fix them one-by-one. This leads to unhappy developers and ultimately, to ignoring the tests.</p>
+</section>
+</section>
+<section id="final-thoughts">
+<h2>Final thoughts<a class="headerlink" href="#final-thoughts" title="Permalink to this heading">#</a></h2>
+<p>Software development is all about trade-offs. Software testing is no different.</p>
+<p>Testing using behavioural verification is attractive because it’s quicker to get the tests written initially. The trade-off is a closer coupling to the implementation details of the code. The <code class="docutils literal notranslate"><span class="pre">patch</span></code> decorator from the <code class="docutils literal notranslate"><span class="pre">unittest</span></code> library in Python encourages writing tests that are coupled to implementation details.</p>
+<p>Tests that are coupled to implementation details lead to fragile tests. And fragile tests ultimately harm the long-term development of a codebase - instead of easing the burden of code maintenance and refactors, they make it more difficult.</p>
+<p>In my experience, to maintain a healthy codebase in Python avoid using the <code class="docutils literal notranslate"><span class="pre">patch</span></code> decorator in your tests as much as possible.</p>
+</section>
+</section>
+
+<div class="section">
+    
+
+<div class="section">
+  <span style="float: left">
+    
+  </span>
+  <span>&nbsp;</span>
+  <span style="float: right">
+    
+  </span>
+</div>
+  
+</div>
+
+            </article>
+            
+
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="nenb/nenb.github.io"
+        data-repo-id="R_kgDOI8t5Fw"
+        data-category="Blog comments"
+        data-category-id="DIC_kwDOI8t5F84CUKjn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="preferred_color_scheme"
+        data-lang="en"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+
+
+            
+            
+            <footer class="bd-footer-article">
+                <!-- Previous / next buttons -->
+<div class='prev-next-area'>
+</div>
+            </footer>
+            
+          </div>
+          
+          
+          
+          
+        </div>
+        <footer class="bd-footer-content">
+          <div class="bd-footer-content__inner">
+            
+          </div>
+        </footer>
+        
+      </main>
+    </div>
+  </div>
+
+  
+    
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=796348d33e8b1d947c94"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=796348d33e8b1d947c94"></script>
+
+  <footer class="bd-footer"><div class="bd-footer__inner container">
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">
+        PyData Sphinx Theme
+    </a>
+    0.12.0.
+</p>
+  </div>
+  
+  <div class="footer-item">
+    
+<p class="sphinx-version">
+Created using <a href="http://sphinx-doc.org/">Sphinx</a> 5.3.0.<br>
+</p>
+
+  </div>
+  
+</div>
+  </footer>
+  </body>
+</html>
