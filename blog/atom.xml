@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
   <id>nenb.github.io</id>
   <title>Nick Byrne's Blog</title>
-  <updated>2023-05-19T15:49:16.361921+00:00</updated>
+  <updated>2023-10-11T17:05:42.788004+00:00</updated>
   <link href="nenb.github.io"/>
   <link href="nenb.github.io/blog/atom.xml" rel="self"/>
   <generator uri="https://ablog.readthedocs.org/" version="0.10.33">ABlog</generator>
@@ -181,5 +181,24 @@
     <link href="nenb.github.io/blog/fragile_tests.html" rel="alternate"/>
     <summary>(Inspired by a tweet from Hynek Schlawack)</summary>
     <published>2022-05-18T00:00:00+00:00</published>
+  </entry>
+  <entry>
+    <id>nenb.github.io/blog/sqlite_integer_encoding.html</id>
+    <title>Sqlite Integer Encoding</title>
+    <updated>2023-10-11T00:00:00+00:00</updated>
+    <author>
+      <name>Nick Byrne</name>
+    </author>
+    <content type="html">&lt;section id="sqlite-integer-encoding"&gt;
+
+&lt;p&gt;(&lt;em&gt;Insert one-line preamble here&lt;/em&gt;)&lt;/p&gt;
+&lt;section id="title"&gt;
+&lt;h2&gt;Title&lt;/h2&gt;
+&lt;/section&gt;
+&lt;/section&gt;
+</content>
+    <link href="nenb.github.io/blog/sqlite_integer_encoding.html" rel="alternate"/>
+    <summary>(Insert one-line preamble here)</summary>
+    <published>2023-10-11T00:00:00+00:00</published>
   </entry>
 </feed>
