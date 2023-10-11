@@ -6,10 +6,9 @@ author: Nick Byrne
 category: Category
 ---
 
-Fragile Tests
-=======
+# Fragile Tests
 
-(*Inspired by a [tweet](https://twitter.com/hynek/status/1172034561959706624) from Hynek Schlawack*)
+*Inspired by a [tweet](https://twitter.com/hynek/status/1172034561959706624) from Hynek Schlawack*
 
 ## Why do we test?
 

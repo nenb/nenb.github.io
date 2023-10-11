@@ -42,7 +42,7 @@ html_theme_options = {
 }
 
 html_favicon = "_static/favicon.ico"
-html_title = "Nick Byrne"
+html_title = "Homepage"
 html_static_path = ["_static"]
 html_sidebars = {"index": ["hello.html"], "blog/**": ["hello.html"]}
 blog_baseurl = "nenb.github.io"
@@ -51,7 +51,7 @@ blog_path = "blog"
 fontawesome_included = True
 blog_post_pattern = "blog/*"
 post_redirect_refresh = 1
-post_auto_image = 1
+post_auto_image = 0
 post_auto_excerpt = 1
 post_show_prev_next = True
 blog_feed_fulltext = True
