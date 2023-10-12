@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
   <id>nenb.github.io</id>
   <title>Nick Byrne's Blog</title>
-  <updated>2023-10-11T17:05:42.788004+00:00</updated>
+  <updated>2023-10-12T16:40:07.633812+00:00</updated>
   <link href="nenb.github.io"/>
   <link href="nenb.github.io/blog/atom.xml" rel="self"/>
   <generator uri="https://ablog.readthedocs.org/" version="0.10.33">ABlog</generator>
@@ -184,21 +184,174 @@
   </entry>
   <entry>
     <id>nenb.github.io/blog/sqlite_integer_encoding.html</id>
-    <title>Sqlite Integer Encoding</title>
+    <title>sqlite Integer Encoding</title>
     <updated>2023-10-11T00:00:00+00:00</updated>
     <author>
       <name>Nick Byrne</name>
     </author>
-    <content type="html">&lt;section id="sqlite-integer-encoding"&gt;
+    <content type="html">&lt;section id="trade-offs"&gt;
 
-&lt;p&gt;(&lt;em&gt;Insert one-line preamble here&lt;/em&gt;)&lt;/p&gt;
-&lt;section id="title"&gt;
-&lt;h2&gt;Title&lt;/h2&gt;
+&lt;p&gt;(&lt;em&gt;A short summary of some experimentation, inspired by Simon Willison’s &lt;a class="reference external" href="https://github.com/simonw/til"&gt;TIL&lt;/a&gt;&lt;/em&gt;)&lt;/p&gt;
+&lt;section id="variable-length-integer-encoding"&gt;
+&lt;h2&gt;Variable-Length Integer Encoding&lt;/h2&gt;
+&lt;p&gt;I often find myself drawn to content discussing trade-off decisions behind some program design. Recently I’ve been reading about the decisions behind the Apache Arrow Flight framework, and behind the file format for &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;What I found interesting about Flight is that it offers the possibility of almost no serialization costs - data is sent directly over the wire in the native Arrow format, and it’s only the (comparatively small) metadata that is serialized via the Protocol Buffer format. There is a trade-off here between increased network costs and reduced CPU costs.&lt;/p&gt;
+&lt;p&gt;Protocol Buffers were actually designed with the opposite trade-offs in mind. They use a variable-length integer (or ‘varint’) encoding for integers. This results in less data to transfer over the network, but at the cost of extra CPU work at both ends of the network connection. Interestingly, this decision was reversed for the Cap’n Proto format (a successor to the Protocol Buffer format), as the author considered the trade-off to no longer be &lt;a class="reference external" href="https://stackoverflow.com/a/24642169"&gt;desirable&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; uses a similar varint encoding for its own file format. &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; is widely used in embedded devices and in the ‘Internet of Things’ and so reduced storage costs are also an important consideration in this design decision. However, most of my projects with &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; don’t take place on systems where storage is at such a premium, and I was interested in getting a quick idea about what sort of trade-offs might actually be involved for my own use-cases.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Warning: What follows is a brief and naive analysis of varint encoding costs in &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt;. Please take it with a healthy pinch of salt!&lt;/strong&gt;&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="setup"&gt;
+&lt;h2&gt;Setup&lt;/h2&gt;
+&lt;p&gt;The first step was to decide on some data and a couple of test cases for profiling. In the interests of time, I decided to adopt a variation of some old material from the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; &lt;a class="reference external" href="https://www.sqlite.org/speed.html"&gt;website&lt;/a&gt;.&lt;/p&gt;
+&lt;section id="data"&gt;
+&lt;h3&gt;Data&lt;/h3&gt;
+&lt;p&gt;In my adaptation there were 2 tables, each with ten million rows:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Table 1&lt;/strong&gt;&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr class="row-odd"&gt;&lt;th class="head"&gt;&lt;p&gt;RowId&lt;/p&gt;&lt;/th&gt;
+&lt;th class="head"&gt;&lt;p&gt;RandomInteger&lt;/p&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr class="row-even"&gt;&lt;td&gt;&lt;p&gt;1&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;253&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr class="row-odd"&gt;&lt;td&gt;&lt;p&gt;2&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;7&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr class="row-even"&gt;&lt;td&gt;&lt;p&gt;…&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;…&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;strong&gt;Table 2&lt;/strong&gt;&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr class="row-odd"&gt;&lt;th class="head"&gt;&lt;p&gt;RowId&lt;/p&gt;&lt;/th&gt;
+&lt;th class="head"&gt;&lt;p&gt;RandomInteger&lt;/p&gt;&lt;/th&gt;
+&lt;th class="head"&gt;&lt;p&gt;RandomWord&lt;/p&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr class="row-even"&gt;&lt;td&gt;&lt;p&gt;1&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;253&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;‘squalid’&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr class="row-odd"&gt;&lt;td&gt;&lt;p&gt;2&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;7&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;‘days’&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr class="row-even"&gt;&lt;td&gt;&lt;p&gt;…&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;…&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;…&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Most real-world data is not uniformly distributed and so I selected my random integers according to the following empirical distribution:&lt;/p&gt;
+&lt;div class="highlight-default notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="n"&gt;byte&lt;/span&gt; &lt;span class="n"&gt;integer&lt;/span&gt; &lt;span class="o"&gt;~&lt;/span&gt; &lt;span class="mi"&gt;90&lt;/span&gt;&lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;of&lt;/span&gt; &lt;span class="n"&gt;values&lt;/span&gt;
+&lt;span class="mi"&gt;2&lt;/span&gt; &lt;span class="n"&gt;byte&lt;/span&gt; &lt;span class="n"&gt;integer&lt;/span&gt; &lt;span class="o"&gt;~&lt;/span&gt; &lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;of&lt;/span&gt; &lt;span class="n"&gt;values&lt;/span&gt;
+&lt;span class="mi"&gt;3&lt;/span&gt; &lt;span class="n"&gt;byte&lt;/span&gt; &lt;span class="n"&gt;integer&lt;/span&gt; &lt;span class="o"&gt;~&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;of&lt;/span&gt; &lt;span class="n"&gt;values&lt;/span&gt;
+&lt;span class="mi"&gt;4&lt;/span&gt; &lt;span class="n"&gt;byte&lt;/span&gt; &lt;span class="n"&gt;integer&lt;/span&gt; &lt;span class="o"&gt;~&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;of&lt;/span&gt; &lt;span class="n"&gt;values&lt;/span&gt;
+&lt;span class="mi"&gt;6&lt;/span&gt; &lt;span class="n"&gt;byte&lt;/span&gt; &lt;span class="n"&gt;integer&lt;/span&gt; &lt;span class="o"&gt;~&lt;/span&gt; &lt;span class="mf"&gt;0.75&lt;/span&gt;&lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;of&lt;/span&gt; &lt;span class="n"&gt;values&lt;/span&gt;
+&lt;span class="mi"&gt;8&lt;/span&gt; &lt;span class="n"&gt;byte&lt;/span&gt; &lt;span class="n"&gt;integer&lt;/span&gt; &lt;span class="o"&gt;~&lt;/span&gt; &lt;span class="mf"&gt;0.25&lt;/span&gt;&lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;of&lt;/span&gt; &lt;span class="n"&gt;values&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;For the data in Table 2, I selected 1000 random words from &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;/usr/share/dict/words&lt;/span&gt;&lt;/code&gt; and then sampled from them uniformly.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="test-cases"&gt;
+&lt;h3&gt;Test cases&lt;/h3&gt;
+&lt;p&gt;I had six test cases. Test cases 1 - 4 involved reading from disk and closely followed the test cases outlined on the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; website (but note that I have chosen a somewhat arbitrary cut-off value in test case 3):&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;test case 1:&lt;/strong&gt; &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;SELECT&lt;/span&gt; &lt;span class="pre"&gt;count(*),avg(RandomInteger)&lt;/span&gt; &lt;span class="pre"&gt;FROM&lt;/span&gt; &lt;span class="pre"&gt;table1;&lt;/span&gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;test case 2:&lt;/strong&gt; &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;SELECT&lt;/span&gt; &lt;span class="pre"&gt;count(*),avg(RandomInteger)&lt;/span&gt; &lt;span class="pre"&gt;FROM&lt;/span&gt; &lt;span class="pre"&gt;table2;&lt;/span&gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;test case 3:&lt;/strong&gt; &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;SELECT&lt;/span&gt; &lt;span class="pre"&gt;count(*),avg(RandomInteger)&lt;/span&gt; &lt;span class="pre"&gt;FROM&lt;/span&gt; &lt;span class="pre"&gt;table2&lt;/span&gt; &lt;span class="pre"&gt;WHERE&lt;/span&gt; &lt;span class="pre"&gt;RandomInteger&amp;gt;68;&lt;/span&gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;test case 4:&lt;/strong&gt; &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;SELECT&lt;/span&gt; &lt;span class="pre"&gt;count(*),avg(RandomInteger)&lt;/span&gt; &lt;span class="pre"&gt;FROM&lt;/span&gt; &lt;span class="pre"&gt;table2&lt;/span&gt; &lt;span class="pre"&gt;WHERE&lt;/span&gt; &lt;span class="pre"&gt;RandomWord&lt;/span&gt; &lt;span class="pre"&gt;LIKE&lt;/span&gt; &lt;span class="pre"&gt;'squalid';&lt;/span&gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Test cases 5 - 6 involved reading and writing to disk. They were a mix of the test cases on the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; website, and a personal desire to also import the data from pre-populated CSV files (which is a pattern that still occurs quite frequently for me):&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;test case 5:&lt;/strong&gt; &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;.import&lt;/span&gt; &lt;span class="pre"&gt;table1.csv&lt;/span&gt; &lt;span class="pre"&gt;table1&lt;/span&gt; &lt;span class="pre"&gt;--csv&lt;/span&gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;test case 6:&lt;/strong&gt; &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;.import&lt;/span&gt; &lt;span class="pre"&gt;table2.csv&lt;/span&gt; &lt;span class="pre"&gt;table2&lt;/span&gt; &lt;span class="pre"&gt;--csv&lt;/span&gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Both of these cases were run after initially creating the schema in the relevant database file (e.g. &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;CREATE&lt;/span&gt; &lt;span class="pre"&gt;TABLE&lt;/span&gt; &lt;span class="pre"&gt;table1&lt;/span&gt; &lt;span class="pre"&gt;(&amp;quot;RandomInteger&amp;quot;&lt;/span&gt; &lt;span class="pre"&gt;INTEGER,&lt;/span&gt; &lt;span class="pre"&gt;&amp;quot;RandomWord&amp;quot;&lt;/span&gt; &lt;span class="pre"&gt;TEXT);&lt;/span&gt;&lt;/code&gt;) and are assuming that the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;.import&lt;/span&gt;&lt;/code&gt; command has been optimised by the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; developers for importing efficiently from CSV files.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="tools"&gt;
+&lt;h3&gt;Tools&lt;/h3&gt;
+&lt;p&gt;My personal machine is Linux-based and I used &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;time&lt;/span&gt;&lt;/code&gt;, &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;perf&lt;/span&gt;&lt;/code&gt; and the &lt;a class="reference external" href="https://github.com/brendangregg/FlameGraph"&gt;Flamegraph Visualiser&lt;/a&gt; for the analysis. There was a version of &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite3&lt;/span&gt;&lt;/code&gt; available from the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;apt&lt;/span&gt;&lt;/code&gt; package manager and I also started with this. Unfortunately, I soon discovered that this binary had had its symbol table stripped (&lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;objdump&lt;/span&gt; &lt;span class="pre"&gt;--syms&lt;/span&gt;&lt;/code&gt;) and was of limited use for my analysis with &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;perf&lt;/span&gt;&lt;/code&gt;. So instead, I pulled the latest version of &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; and built it on my local machine. After some brief experimentation, I settled on the following for gathering a profile of my test cases: &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;perf&lt;/span&gt; &lt;span class="pre"&gt;record&lt;/span&gt; &lt;span class="pre"&gt;-F&lt;/span&gt; &lt;span class="pre"&gt;9999&lt;/span&gt; &lt;span class="pre"&gt;--call-graph&lt;/span&gt; &lt;span class="pre"&gt;dwarf&lt;/span&gt; &lt;span class="pre"&gt;-o&lt;/span&gt; &lt;span class="pre"&gt;perf.data&lt;/span&gt; &lt;span class="pre"&gt;bash&lt;/span&gt; &lt;span class="pre"&gt;&amp;lt;MY_BASH_SCRIPT&amp;gt;&lt;/span&gt;&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;(&lt;em&gt;Note: Unprivileged users made need to play with the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;perf_event_paranoid&lt;/span&gt;&lt;/code&gt; setting if possible.&lt;/em&gt;)&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;
+&lt;section id="results"&gt;
+&lt;h2&gt;Results&lt;/h2&gt;
+&lt;p&gt;What quickly became apparent was that reading from disk into the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; page cache was a non-negligible cost. On reflection, I think that this was to be expected. I have split the results into those with a cold cache and those with a warm cache to account for this cost. I used the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sync&lt;/span&gt;&lt;/code&gt; command along with writing to &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;/proc/sys/vm/drop_caches&lt;/span&gt;&lt;/code&gt; to clear the system cache in between test runs.&lt;/p&gt;
+&lt;p&gt;An implementation detail of &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;sqlite&lt;/span&gt;&lt;/code&gt; that is relevant to the results is that when data is moved to the page cache, it is not decoded - it remains in its original disk format (see the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;xRead()&lt;/span&gt;&lt;/code&gt; method for further details). This means that even though the warm cache results take less time, they still include the costs of decoding the varints.&lt;/p&gt;
+&lt;section id="test-cases-1-4"&gt;
+&lt;h3&gt;Test cases 1 - 4&lt;/h3&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr class="row-odd"&gt;&lt;th class="head"&gt;&lt;p&gt;Test Case&lt;/p&gt;&lt;/th&gt;
+&lt;th class="head"&gt;&lt;p&gt;Cold&lt;/p&gt;&lt;/th&gt;
+&lt;th class="head"&gt;&lt;p&gt;Warm&lt;/p&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr class="row-even"&gt;&lt;td&gt;&lt;p&gt;1&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;(0.7,0.8)&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;(0.5, 0.55)&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr class="row-odd"&gt;&lt;td&gt;&lt;p&gt;2&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;(0.9,1.0)&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;(0.65, 0.7)&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr class="row-even"&gt;&lt;td&gt;&lt;p&gt;3&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;(0.65, 0.8)&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;(0.6, 0.65)&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr class="row-odd"&gt;&lt;td&gt;&lt;p&gt;4&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;(0.7, 0.75)&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;(0.5, 0.55)&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr class="row-even"&gt;&lt;td&gt;&lt;p&gt;[&lt;em&gt;5% and 95% confidence intervals (seconds)&lt;/em&gt;]&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;td&gt;&lt;p&gt;&lt;/p&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;All of the profiles shared a similar overall appearance and so I’ve only included two profiles to highlight the most important details.&lt;/p&gt;
+&lt;img alt="test case 2" src="_images/tradeoffs_test_case2.png" style="width: 900px;" /&gt;
+&lt;p&gt;&lt;em&gt;Test Case 2 Profile - Cold&lt;/em&gt;&lt;/p&gt;
+&lt;!---
+&lt;img src="../images/tradeoffs_test_case3.svg"&gt;
+
+sqlite3VdbeSerialGet IS WHAT IS USED FOR DECODING!
+BUT THEN COMPLICATED BY HAVING TO DETERMINE THE SIZE OF EACH CELL AND SHIFT THE POINTER. TEXT IS PART OF THIS WHICH COMPLICATES THINGS. BUT IN T2 ITS FAIRLY STRAIGHTFORWARD.
+sqlite3BtreePayloadSize and sqlite3VdbeSerialGet
+
+
+
+### Test cases 5 - 6
+
+## Final thoughts
+
+There are three primary performance factors for a variable-length integer encoding:
+- Compression ratio (for the relevant distribution of integers)
+- Decoding speed.
+- Encoding speed.
+
+
+
+ "While SQLite is a general-purpose database engine, it is primarily designed for fast online transaction processing (OLTP)."
+
+ - BRIEF COMPARISON AGAINST UNCOMPRESSED PARQUET FOR ON DISK SIZE
+- MENTION THAT COMPRESSION IMPORTANT FOR EMBEDDED APPLICATIONS
+
+--&gt;
+&lt;/section&gt;
 &lt;/section&gt;
 &lt;/section&gt;
 </content>
     <link href="nenb.github.io/blog/sqlite_integer_encoding.html" rel="alternate"/>
-    <summary>(Insert one-line preamble here)</summary>
+    <summary>(A short summary of some experimentation, inspired by Simon Willison’s TIL)test case 2</summary>
     <published>2023-10-11T00:00:00+00:00</published>
   </entry>
 </feed>

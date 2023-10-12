@@ -1,17 +1,135 @@
 ---
-title: Sqlite Integer Encoding
+title: sqlite Integer Encoding
 date: 2023-10-11
 blogpost: true
 author: Nick Byrne
 category: Category
 ---
 
-Sqlite Integer Encoding
+Trade-offs
 =======
 
-(*Insert one-line preamble here*)
+(*A short summary of some experimentation, inspired by Simon Willison's [TIL](https://github.com/simonw/til)*)
 
-## Title
+## Variable-Length Integer Encoding
+
+I often find myself drawn to content discussing trade-off decisions behind some program design. Recently I've been reading about the decisions behind the Apache Arrow Flight framework, and behind the file format for `sqlite`. 
+
+What I found interesting about Flight is that it offers the possibility of almost no serialization costs - data is sent directly over the wire in the native Arrow format, and it's only the (comparatively small) metadata that is serialized via the Protocol Buffer format. There is a trade-off here between increased network costs and reduced CPU costs.
+
+Protocol Buffers were actually designed with the opposite trade-offs in mind. They use a variable-length integer (or 'varint') encoding for integers. This results in less data to transfer over the network, but at the cost of extra CPU work at both ends of the network connection. Interestingly, this decision was reversed for the Cap'n Proto format (a successor to the Protocol Buffer format), as the author considered the trade-off to no longer be [desirable](https://stackoverflow.com/a/24642169).
+
+`sqlite` uses a similar varint encoding for its own file format. `sqlite` is widely used in embedded devices and in the 'Internet of Things' and so reduced storage costs are also an important consideration in this design decision. However, most of my projects with `sqlite` don't take place on systems where storage is at such a premium, and I was interested in getting a quick idea about what sort of trade-offs might actually be involved for my own use-cases.
+
+**Warning: What follows is a brief and naive analysis of varint encoding costs in `sqlite`. Please take it with a healthy pinch of salt!**
+
+## Setup
+
+The first step was to decide on some data and a couple of test cases for profiling. In the interests of time, I decided to adopt a variation of some old material from the `sqlite` [website](https://www.sqlite.org/speed.html).
+
+### Data
+
+In my adaptation there were 2 tables, each with ten million rows:
+
+**Table 1**
+
+| RowId | RandomInteger |
+|-------|---------------|
+|   1   |     253       |
+|   2   |      7        |
+|  ...  |     ...       |
 
 
+**Table 2**
+
+| RowId | RandomInteger | RandomWord |
+|-------|---------------|------------|
+|   1   |     253       |  'squalid' | 
+|   2   |      7        |   'days'   |
+|  ...  |     ...       |     ...    | 
+
+Most real-world data is not uniformly distributed and so I selected my random integers according to the following empirical distribution:
+```
+1 byte integer ~ 90% of values
+2 byte integer ~ 5% of values
+3 byte integer ~ 3% of values
+4 byte integer ~ 1% of values
+6 byte integer ~ 0.75% of values
+8 byte integer ~ 0.25% of values
+```
+
+For the data in Table 2, I selected 1000 random words from `/usr/share/dict/words` and then sampled from them uniformly.
+
+### Test cases
+
+I had six test cases. Test cases 1 - 4 involved reading from disk and closely followed the test cases outlined on the `sqlite` website (but note that I have chosen a somewhat arbitrary cut-off value in test case 3):
+
+- **test case 1:** `SELECT count(*),avg(RandomInteger) FROM table1;`
+- **test case 2:** `SELECT count(*),avg(RandomInteger) FROM table2;`
+- **test case 3:** `SELECT count(*),avg(RandomInteger) FROM table2 WHERE RandomInteger>68;`
+- **test case 4:** `SELECT count(*),avg(RandomInteger) FROM table2 WHERE RandomWord LIKE 'squalid';`
+
+Test cases 5 - 6 involved reading and writing to disk. They were a mix of the test cases on the `sqlite` website, and a personal desire to also import the data from pre-populated CSV files (which is a pattern that still occurs quite frequently for me):
+
+- **test case 5:** `.import table1.csv table1 --csv`
+- **test case 6:** `.import table2.csv table2 --csv`
+
+Both of these cases were run after initially creating the schema in the relevant database file (e.g. `CREATE TABLE table1 ("RandomInteger" INTEGER, "RandomWord" TEXT);`) and are assuming that the `.import` command has been optimised by the `sqlite` developers for importing efficiently from CSV files.
+
+### Tools
+
+My personal machine is Linux-based and I used `time`, `perf` and the [Flamegraph Visualiser](https://github.com/brendangregg/FlameGraph) for the analysis. There was a version of `sqlite3` available from the `apt` package manager and I also started with this. Unfortunately, I soon discovered that this binary had had its symbol table stripped (`objdump --syms`) and was of limited use for my analysis with `perf`. So instead, I pulled the latest version of `sqlite` and built it on my local machine. After some brief experimentation, I settled on the following for gathering a profile of my test cases: `perf record -F 9999 --call-graph dwarf -o perf.data bash <MY_BASH_SCRIPT>`.
+
+(*Note: Unprivileged users made need to play with the `perf_event_paranoid` setting if possible.*)
+
+## Results
+
+What quickly became apparent was that reading from disk into the `sqlite` page cache was a non-negligible cost. On reflection, I think that this was to be expected. I have split the results into those with a cold cache and those with a warm cache to account for this cost. I used the `sync` command along with writing to `/proc/sys/vm/drop_caches` to clear the system cache in between test runs.
+
+An implementation detail of `sqlite` that is relevant to the results is that when data is moved to the page cache, it is not decoded - it remains in its original disk format (see the `xRead()` method for further details). This means that even though the warm cache results take less time, they still include the costs of decoding the varints.
+
+### Test cases 1 - 4
+
+| Test Case |    Cold    |    Warm    |
+|-----------|------------|------------|
+|     1     | (0.7,0.8)  | (0.5, 0.55)|
+|     2     | (0.9,1.0)  | (0.65, 0.7)|
+|     3     | (0.65, 0.8)| (0.6, 0.65)|
+|     4     | (0.7, 0.75)| (0.5, 0.55)|
+[*5% and 95% confidence intervals (seconds)*]
+
+All of the profiles shared a similar overall appearance and so I've only included two profiles to highlight the most important details.
+
+<img src="../images/tradeoffs_test_case2.png" alt="test case 2" width="900">
+
+*Test Case 2 Profile - Cold*
+
+
+
+<!---
+<img src="../images/tradeoffs_test_case3.svg">
+
+sqlite3VdbeSerialGet IS WHAT IS USED FOR DECODING!
+BUT THEN COMPLICATED BY HAVING TO DETERMINE THE SIZE OF EACH CELL AND SHIFT THE POINTER. TEXT IS PART OF THIS WHICH COMPLICATES THINGS. BUT IN T2 ITS FAIRLY STRAIGHTFORWARD.
+sqlite3BtreePayloadSize and sqlite3VdbeSerialGet
+
+
+
+### Test cases 5 - 6
+
+## Final thoughts
+
+There are three primary performance factors for a variable-length integer encoding:
+- Compression ratio (for the relevant distribution of integers)
+- Decoding speed.
+- Encoding speed.
+
+
+
+ "While SQLite is a general-purpose database engine, it is primarily designed for fast online transaction processing (OLTP)."
+
+ - BRIEF COMPARISON AGAINST UNCOMPRESSED PARQUET FOR ON DISK SIZE
+- MENTION THAT COMPRESSION IMPORTANT FOR EMBEDDED APPLICATIONS
+
+-->
 
