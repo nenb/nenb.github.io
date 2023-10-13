@@ -12,7 +12,7 @@
   
 <meta property="og:url" content="blog/sqlite_integer_encoding.html" />
   
-<meta property="og:description" content="( A short summary of some experimentation, inspired by Simon Willison’s TIL) Variable-Length Integer Encoding: I often find myself drawn to content discussing trade-off decisions behind some progra..." />
+<meta property="og:description" content="Some experimentation with SQLite and variable-length integer encoding Variable-length integer encoding: I often find myself drawn to content discussing trade-offs behind some program design. Recent..." />
   
 <meta property="og:image" content="nenb.github.io/_static/profile.jpg" />
   
@@ -144,7 +144,7 @@
 
   
   
-    <p class="title logo__title">Nick Byrne</p>
+    <p class="title logo__title">Homepage</p>
   
 </a>
     
@@ -345,8 +345,10 @@
 
 <div class="bio-info">
     <div class="name">
+        Nick Byrne
     </div>
     <div class="focusareas">
+        Software Engineer
     </div>
 </div>
     </div>
@@ -379,102 +381,73 @@
             <article class="bd-article" role="main">
                <section id="trade-offs">
 <h1>Trade-offs<a class="headerlink" href="#trade-offs" title="Permalink to this heading">#</a></h1>
-<p>(<em>A short summary of some experimentation, inspired by Simon Willison’s <a class="reference external" href="https://github.com/simonw/til">TIL</a></em>)</p>
+<p><em>Some experimentation with SQLite and variable-length integer encoding</em></p>
 <section id="variable-length-integer-encoding">
-<h2>Variable-Length Integer Encoding<a class="headerlink" href="#variable-length-integer-encoding" title="Permalink to this heading">#</a></h2>
-<p>I often find myself drawn to content discussing trade-off decisions behind some program design. Recently I’ve been reading about the decisions behind the Apache Arrow Flight framework, and behind the file format for <code class="docutils literal notranslate"><span class="pre">sqlite</span></code>.</p>
-<p>What I found interesting about Flight is that it offers the possibility of almost no serialization costs - data is sent directly over the wire in the native Arrow format, and it’s only the (comparatively small) metadata that is serialized via the Protocol Buffer format. There is a trade-off here between increased network costs and reduced CPU costs.</p>
+<h2>Variable-length integer encoding<a class="headerlink" href="#variable-length-integer-encoding" title="Permalink to this heading">#</a></h2>
+<p>I often find myself drawn to content discussing trade-offs behind some program design. Recently I’ve been reading about the design decisions behind the Apache Arrow Flight framework, and also behind the file format for SQLite.</p>
+<p>What I found interesting about Flight is that it offers the possibility of almost no serialization costs - data is sent directly over the wire in the native Arrow format, and it’s only the comparatively small metadata that is serialized via the Protocol Buffer format. There is a trade-off here between increased network costs and reduced CPU costs.</p>
 <p>Protocol Buffers were actually designed with the opposite trade-offs in mind. They use a variable-length integer (or ‘varint’) encoding for integers. This results in less data to transfer over the network, but at the cost of extra CPU work at both ends of the network connection. Interestingly, this decision was reversed for the Cap’n Proto format (a successor to the Protocol Buffer format), as the author considered the trade-off to no longer be <a class="reference external" href="https://stackoverflow.com/a/24642169">desirable</a>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">sqlite</span></code> uses a similar varint encoding for its own file format. <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> is widely used in embedded devices and in the ‘Internet of Things’ and so reduced storage costs are also an important consideration in this design decision. However, most of my projects with <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> don’t take place on systems where storage is at such a premium, and I was interested in getting a quick idea about what sort of trade-offs might actually be involved for my own use-cases.</p>
-<p><strong>Warning: What follows is a brief and naive analysis of varint encoding costs in <code class="docutils literal notranslate"><span class="pre">sqlite</span></code>. Please take it with a healthy pinch of salt!</strong></p>
+<p>SQLite uses a varint encoding for its own file format. SQLite is widely used across embedded devices, and so storage costs are also an important consideration in this design decision. However, most of my projects with SQLite don’t take place on systems where storage is at such a premium, and I was interested in getting a rough idea about what sort of trade-offs might be involved for my own use-cases.</p>
+<p>🚨 <strong>Warning: What follows is a brief and somewhat naive analysis of varint encoding costs in SQLite. Please take it with a healthy pinch of salt!</strong> 🚨</p>
 </section>
-<section id="setup">
-<h2>Setup<a class="headerlink" href="#setup" title="Permalink to this heading">#</a></h2>
-<p>The first step was to decide on some data and a couple of test cases for profiling. In the interests of time, I decided to adopt a variation of some old material from the <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> <a class="reference external" href="https://www.sqlite.org/speed.html">website</a>.</p>
+<section id="experimentation-setup">
+<h2>Experimentation setup<a class="headerlink" href="#experimentation-setup" title="Permalink to this heading">#</a></h2>
+<p>In the interests of time, I adapted a variation of some old profiling material from the SQLite <a class="reference external" href="https://www.sqlite.org/speed.html">website</a>:</p>
 <section id="data">
 <h3>Data<a class="headerlink" href="#data" title="Permalink to this heading">#</a></h3>
 <p>In my adaptation there were 2 tables, each with ten million rows:</p>
-<p><strong>Table 1</strong></p>
 <table class="table">
 <thead>
-<tr class="row-odd"><th class="head"><p>RowId</p></th>
-<th class="head"><p>RandomInteger</p></th>
+<tr class="row-odd"><th class="head"><p>Table 1</p></th>
+<th class="head"><p>Table 2</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>1</p></td>
-<td><p>253</p></td>
-</tr>
-<tr class="row-odd"><td><p>2</p></td>
-<td><p>7</p></td>
-</tr>
-<tr class="row-even"><td><p>…</p></td>
-<td><p>…</p></td>
+<tr class="row-even"><td><p><table> <tr><th>RowId</th><th>RandomInteger</th></tr><tr><td>1</td><td>53</td></tr><tr><td>2</td><td>7</td></tr><tr><td>…</td><td>…</td></tr> </table></p></td>
+<td><p><table> <tr><th>RowId</th><th>RandomInteger</th><th>RandomWord</th></tr><tr><td>1</td><td>53</td><td>’squalid’</td></tr><tr><td>2</td><td>7</td><td>’days’</td></tr><tr><td>…</td><td>…</td><td>…</td></tr> </table></p></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Table 2</strong></p>
-<table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>RowId</p></th>
-<th class="head"><p>RandomInteger</p></th>
-<th class="head"><p>RandomWord</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p>1</p></td>
-<td><p>253</p></td>
-<td><p>‘squalid’</p></td>
-</tr>
-<tr class="row-odd"><td><p>2</p></td>
-<td><p>7</p></td>
-<td><p>‘days’</p></td>
-</tr>
-<tr class="row-even"><td><p>…</p></td>
-<td><p>…</p></td>
-<td><p>…</p></td>
-</tr>
-</tbody>
-</table>
-<p>Most real-world data is not uniformly distributed and so I selected my random integers according to the following empirical distribution:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="mi">1</span> <span class="n">byte</span> <span class="n">integer</span> <span class="o">~</span> <span class="mi">90</span><span class="o">%</span> <span class="n">of</span> <span class="n">values</span>
-<span class="mi">2</span> <span class="n">byte</span> <span class="n">integer</span> <span class="o">~</span> <span class="mi">5</span><span class="o">%</span> <span class="n">of</span> <span class="n">values</span>
-<span class="mi">3</span> <span class="n">byte</span> <span class="n">integer</span> <span class="o">~</span> <span class="mi">3</span><span class="o">%</span> <span class="n">of</span> <span class="n">values</span>
-<span class="mi">4</span> <span class="n">byte</span> <span class="n">integer</span> <span class="o">~</span> <span class="mi">1</span><span class="o">%</span> <span class="n">of</span> <span class="n">values</span>
-<span class="mi">6</span> <span class="n">byte</span> <span class="n">integer</span> <span class="o">~</span> <span class="mf">0.75</span><span class="o">%</span> <span class="n">of</span> <span class="n">values</span>
-<span class="mi">8</span> <span class="n">byte</span> <span class="n">integer</span> <span class="o">~</span> <span class="mf">0.25</span><span class="o">%</span> <span class="n">of</span> <span class="n">values</span>
+<p>Most real-world data is not uniformly distributed. I selected my random integers using the following empirical distribution:</p>
+<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span>1 byte integer ~ 90% of values
+2 byte integer ~ 5% of values
+3 byte integer ~ 3% of values
+4 byte integer ~ 1% of values
+6 byte integer ~ 0.75% of values
+8 byte integer ~ 0.25% of values
 </pre></div>
 </div>
 <p>For the data in Table 2, I selected 1000 random words from <code class="docutils literal notranslate"><span class="pre">/usr/share/dict/words</span></code> and then sampled from them uniformly.</p>
 </section>
 <section id="test-cases">
 <h3>Test cases<a class="headerlink" href="#test-cases" title="Permalink to this heading">#</a></h3>
-<p>I had six test cases. Test cases 1 - 4 involved reading from disk and closely followed the test cases outlined on the <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> website (but note that I have chosen a somewhat arbitrary cut-off value in test case 3):</p>
+<p>I had six test cases. Test cases 1 - 4 involved reading from disk and closely followed the test cases outlined on the SQLite website (but note the fairly arbitrary cut-off value for test case 3):</p>
 <ul class="simple">
 <li><p><strong>test case 1:</strong> <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">count(*),avg(RandomInteger)</span> <span class="pre">FROM</span> <span class="pre">table1;</span></code></p></li>
 <li><p><strong>test case 2:</strong> <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">count(*),avg(RandomInteger)</span> <span class="pre">FROM</span> <span class="pre">table2;</span></code></p></li>
-<li><p><strong>test case 3:</strong> <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">count(*),avg(RandomInteger)</span> <span class="pre">FROM</span> <span class="pre">table2</span> <span class="pre">WHERE</span> <span class="pre">RandomInteger&gt;68;</span></code></p></li>
+<li><p><strong>test case 3:</strong> <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">count(*),avg(RandomInteger)</span> <span class="pre">FROM</span> <span class="pre">table2</span> <span class="pre">WHERE</span> <span class="pre">RandomInteger&gt;63;</span></code></p></li>
 <li><p><strong>test case 4:</strong> <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">count(*),avg(RandomInteger)</span> <span class="pre">FROM</span> <span class="pre">table2</span> <span class="pre">WHERE</span> <span class="pre">RandomWord</span> <span class="pre">LIKE</span> <span class="pre">'squalid';</span></code></p></li>
 </ul>
-<p>Test cases 5 - 6 involved reading and writing to disk. They were a mix of the test cases on the <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> website, and a personal desire to also import the data from pre-populated CSV files (which is a pattern that still occurs quite frequently for me):</p>
+<p>Test cases 5 - 6 involved reading and writing to disk. They were a mix of the test cases on the SQLite website, and a personal desire to also import the data from pre-populated CSV files (which is still a pattern that occurs quite frequently for me):</p>
 <ul class="simple">
 <li><p><strong>test case 5:</strong> <code class="docutils literal notranslate"><span class="pre">.import</span> <span class="pre">table1.csv</span> <span class="pre">table1</span> <span class="pre">--csv</span></code></p></li>
 <li><p><strong>test case 6:</strong> <code class="docutils literal notranslate"><span class="pre">.import</span> <span class="pre">table2.csv</span> <span class="pre">table2</span> <span class="pre">--csv</span></code></p></li>
 </ul>
-<p>Both of these cases were run after initially creating the schema in the relevant database file (e.g. <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span> <span class="pre">table1</span> <span class="pre">(&quot;RandomInteger&quot;</span> <span class="pre">INTEGER,</span> <span class="pre">&quot;RandomWord&quot;</span> <span class="pre">TEXT);</span></code>) and are assuming that the <code class="docutils literal notranslate"><span class="pre">.import</span></code> command has been optimised by the <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> developers for importing efficiently from CSV files.</p>
+<p>Both of these cases were run after initially creating the schema in the relevant database file e.g. <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span> <span class="pre">table2</span> <span class="pre">(&quot;RandomInteger&quot;</span> <span class="pre">INTEGER,</span> <span class="pre">&quot;RandomWord&quot;</span> <span class="pre">TEXT);</span></code>.</p>
 </section>
 <section id="tools">
 <h3>Tools<a class="headerlink" href="#tools" title="Permalink to this heading">#</a></h3>
-<p>My personal machine is Linux-based and I used <code class="docutils literal notranslate"><span class="pre">time</span></code>, <code class="docutils literal notranslate"><span class="pre">perf</span></code> and the <a class="reference external" href="https://github.com/brendangregg/FlameGraph">Flamegraph Visualiser</a> for the analysis. There was a version of <code class="docutils literal notranslate"><span class="pre">sqlite3</span></code> available from the <code class="docutils literal notranslate"><span class="pre">apt</span></code> package manager and I also started with this. Unfortunately, I soon discovered that this binary had had its symbol table stripped (<code class="docutils literal notranslate"><span class="pre">objdump</span> <span class="pre">--syms</span></code>) and was of limited use for my analysis with <code class="docutils literal notranslate"><span class="pre">perf</span></code>. So instead, I pulled the latest version of <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> and built it on my local machine. After some brief experimentation, I settled on the following for gathering a profile of my test cases: <code class="docutils literal notranslate"><span class="pre">perf</span> <span class="pre">record</span> <span class="pre">-F</span> <span class="pre">9999</span> <span class="pre">--call-graph</span> <span class="pre">dwarf</span> <span class="pre">-o</span> <span class="pre">perf.data</span> <span class="pre">bash</span> <span class="pre">&lt;MY_BASH_SCRIPT&gt;</span></code>.</p>
+<p>My personal machine is Linux-based and I used <code class="docutils literal notranslate"><span class="pre">time</span></code>, <code class="docutils literal notranslate"><span class="pre">perf</span></code> and the <a class="reference external" href="https://github.com/brendangregg/FlameGraph">Flamegraph Visualiser</a> for the analysis. There was a version of <code class="docutils literal notranslate"><span class="pre">sqlite3</span></code> available from the <code class="docutils literal notranslate"><span class="pre">apt</span></code> package manager and I started with this. Unfortunately, I soon discovered that it had had its symbol table stripped (<code class="docutils literal notranslate"><span class="pre">objdump</span> <span class="pre">--syms</span></code>) and was of limited use for my analysis with <code class="docutils literal notranslate"><span class="pre">perf</span></code>. Instead, I pulled the latest version (3.44.0) of <code class="docutils literal notranslate"><span class="pre">sqlite3</span></code> and built it on my local machine with the default settings. After some brief experimentation, I settled on the following for gathering a profile of my test cases: <code class="docutils literal notranslate"><span class="pre">perf</span> <span class="pre">record</span> <span class="pre">-F</span> <span class="pre">5000</span> <span class="pre">--call-graph</span> <span class="pre">dwarf</span> <span class="pre">-o</span> <span class="pre">perf.data</span> <span class="pre">bash</span> <span class="pre">&lt;MY_BASH_SCRIPT&gt;</span></code>.</p>
 <p>(<em>Note: Unprivileged users made need to play with the <code class="docutils literal notranslate"><span class="pre">perf_event_paranoid</span></code> setting if possible.</em>)</p>
 </section>
 </section>
-<section id="results">
-<h2>Results<a class="headerlink" href="#results" title="Permalink to this heading">#</a></h2>
-<p>What quickly became apparent was that reading from disk into the <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> page cache was a non-negligible cost. On reflection, I think that this was to be expected. I have split the results into those with a cold cache and those with a warm cache to account for this cost. I used the <code class="docutils literal notranslate"><span class="pre">sync</span></code> command along with writing to <code class="docutils literal notranslate"><span class="pre">/proc/sys/vm/drop_caches</span></code> to clear the system cache in between test runs.</p>
-<p>An implementation detail of <code class="docutils literal notranslate"><span class="pre">sqlite</span></code> that is relevant to the results is that when data is moved to the page cache, it is not decoded - it remains in its original disk format (see the <code class="docutils literal notranslate"><span class="pre">xRead()</span></code> method for further details). This means that even though the warm cache results take less time, they still include the costs of decoding the varints.</p>
+<section id="experimentation-results">
+<h2>Experimentation results<a class="headerlink" href="#experimentation-results" title="Permalink to this heading">#</a></h2>
+<p>What quickly became apparent was that reading from disk into the SQLite page cache was a non-negligible cost. On reflection, this was to be expected. I have split the results into those with a cold cache and those with a warm cache to account for this cost. I used the <code class="docutils literal notranslate"><span class="pre">sync</span></code> command along with writing to <code class="docutils literal notranslate"><span class="pre">/proc/sys/vm/drop_caches</span></code> to clear the system cache.</p>
+<p>A SQLite implementation detail relevant to the results is that data is not decoded when it is moved to the page cache - it remains in its original disk format in the cache (see the <code class="docutils literal notranslate"><span class="pre">xRead()</span></code> method for further details). This means that even though the warm cache results may take less time, they still include the costs of decoding the varints.</p>
 <section id="test-cases-1-4">
 <h3>Test cases 1 - 4<a class="headerlink" href="#test-cases-1-4" title="Permalink to this heading">#</a></h3>
+<p><em>5% and 95% confidence intervals (seconds)</em></p>
 <table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Test Case</p></th>
@@ -484,57 +457,86 @@
 </thead>
 <tbody>
 <tr class="row-even"><td><p>1</p></td>
-<td><p>(0.7,0.8)</p></td>
-<td><p>(0.5, 0.55)</p></td>
+<td><p>(0.7, 0.8)</p></td>
+<td><p>(0.5, 0.6)</p></td>
 </tr>
 <tr class="row-odd"><td><p>2</p></td>
-<td><p>(0.9,1.0)</p></td>
-<td><p>(0.65, 0.7)</p></td>
+<td><p>(0.9, 1.0)</p></td>
+<td><p>(0.6, 0.7)</p></td>
 </tr>
 <tr class="row-even"><td><p>3</p></td>
-<td><p>(0.65, 0.8)</p></td>
-<td><p>(0.6, 0.65)</p></td>
+<td><p>(0.6, 0.8)</p></td>
+<td><p>(0.6, 0.7)</p></td>
 </tr>
 <tr class="row-odd"><td><p>4</p></td>
-<td><p>(0.7, 0.75)</p></td>
-<td><p>(0.5, 0.55)</p></td>
-</tr>
-<tr class="row-even"><td><p>[<em>5% and 95% confidence intervals (seconds)</em>]</p></td>
-<td><p></p></td>
-<td><p></p></td>
+<td><p>(0.7, 0.8)</p></td>
+<td><p>(0.5, 0.6)</p></td>
 </tr>
 </tbody>
 </table>
-<p>All of the profiles shared a similar overall appearance and so I’ve only included two profiles to highlight the most important details.</p>
+<p>All of the flame graphs shared a similar overall appearance. I’ve only included two to highlight the most important details.</p>
+<section id="test-case-2-cold">
+<h4>Test case 2 (cold)<a class="headerlink" href="#test-case-2-cold" title="Permalink to this heading">#</a></h4>
 <a class="reference internal image-reference" href="../_images/tradeoffs_test_case2.png"><img alt="test case 2" src="../_images/tradeoffs_test_case2.png" style="width: 900px;" /></a>
-<p><em>Test Case 2 Profile - Cold</em></p>
-<!---
-<img src="../images/tradeoffs_test_case3.svg">
-
-sqlite3VdbeSerialGet IS WHAT IS USED FOR DECODING!
-BUT THEN COMPLICATED BY HAVING TO DETERMINE THE SIZE OF EACH CELL AND SHIFT THE POINTER. TEXT IS PART OF THIS WHICH COMPLICATES THINGS. BUT IN T2 ITS FAIRLY STRAIGHTFORWARD.
-sqlite3BtreePayloadSize and sqlite3VdbeSerialGet
-
-
-
-### Test cases 5 - 6
-
-## Final thoughts
-
-There are three primary performance factors for a variable-length integer encoding:
-- Compression ratio (for the relevant distribution of integers)
-- Decoding speed.
-- Encoding speed.
-
-
-
- "While SQLite is a general-purpose database engine, it is primarily designed for fast online transaction processing (OLTP)."
-
- - BRIEF COMPARISON AGAINST UNCOMPRESSED PARQUET FOR ON DISK SIZE
-- MENTION THAT COMPRESSION IMPORTANT FOR EMBEDDED APPLICATIONS
-
--->
+<p><em>The two dashed oval regions indicate the costs most easily attributable to decoding the varints in test case 2 (cold cache).</em></p>
+<p>The stack trace on the left hand side (starting with <code class="docutils literal notranslate"><span class="pre">__libc_pread64</span></code>) represents the impact of loading the data from disk into the page cache. The stack trace on the right (starting with <code class="docutils literal notranslate"><span class="pre">__libc_start_call_main</span></code>) is the relevant part for this analysis.</p>
+<p>SQLite works by translating SQL statements into bytecode and then running that bytecode on a virtual machine (like CPython). Presumably the long section at the beginning of the strack trace (<code class="docutils literal notranslate"><span class="pre">sqlite3VdbeExec</span></code>) is related to the initial setup of this virtual machine. Moving further to the right, there are two methods that can be linked to the choice of using a varint encoding. The most easily understood of these is <code class="docutils literal notranslate"><span class="pre">sqlite3VdbeSerialGet</span></code>. It is highlighted by the smaller oval region. This method contains the logic that decodes a varint to an actual integer in memory. It was consistently between 1-2% of the overall time in my experiments. Unless you are a true power user of SQLite, I think it is unlikely that you will notice the impact of this method.</p>
+<p>The second method that can be linked to the choice of using varints is <code class="docutils literal notranslate"><span class="pre">sqlite3BtreePayloadSize</span></code>. It is highlighted by the larger dashed oval region. SQLite uses a variation of a b-tree data structure to efficiently traverse the contents of a table. The size of each leaf node of this b-tree is not known in advance, partially as a result of the use of varints. For example, even if a column is defined as an <code class="docutils literal notranslate"><span class="pre">INTEGER</span></code> from the schema, there is no way of knowing whether a particular row will be a 1- or 8-byte integer (for example) without inspecting the row. This inspection is performed by <code class="docutils literal notranslate"><span class="pre">sqlite3BtreePayloadSize</span></code>.</p>
+<p>Clean attribution is complicated by the fact that other data types that vary in size (for example <code class="docutils literal notranslate"><span class="pre">TEXT</span></code>) may also require this method, as well as the b-tree algorithm itself. Test case 1 does make the attribution a bit cleaner, as there are only two integer columns involved. For test case 1, this method was consistently between 10-15% of overall time in my experiments.</p>
 </section>
+<section id="test-case-3-cold">
+<h4>Test case 3 (cold)<a class="headerlink" href="#test-case-3-cold" title="Permalink to this heading">#</a></h4>
+<a class="reference internal image-reference" href="../_images/tradeoffs_test_case3.png"><img alt="test case 3" src="../_images/tradeoffs_test_case3.png" style="width: 900px;" /></a>
+<p><em>The dashed oval region indicates the costs most easily attributable to decoding the varints in test case 3 (cold cache).</em></p>
+<p>The profile from test case 3 looks very similar to test case 2. The main reason I included it was to highlight that the direct cost of decoding the varints (<code class="docutils literal notranslate"><span class="pre">sqlite3VdbeSerialGet</span></code>) is no longer visible, likely as a result of the sampling frequency I used for <code class="docutils literal notranslate"><span class="pre">perf</span></code> being too coarse. Another way of saying this is that the cost of this method is negligible in test case 3.</p>
+<p>The stack trace attached to <code class="docutils literal notranslate"><span class="pre">sqlite3BtreePayloadSize</span></code> is again clearly visible in test case 3. The attribution is less clean, because it is also required for decoding the random words (<code class="docutils literal notranslate"><span class="pre">TEXT</span></code> data types <a class="reference external" href="https://www.sqlite.org/fileformat.html#record_format">also</a> use a variable-length encoding in SQLite). So, for test case 3 it is likely more correct to say that 10-15% of the costs are closely related to the variable-length encoding <em>in general</em>, rather than to the variable-length integer encoding specifically.</p>
+</section>
+</section>
+<section id="test-cases-5-6">
+<h3>Test cases 5 - 6<a class="headerlink" href="#test-cases-5-6" title="Permalink to this heading">#</a></h3>
+<p><em>5% and 95% confidence intervals (seconds)</em></p>
+<table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test Case</p></th>
+<th class="head"><p>Cold</p></th>
+<th class="head"><p>Warm</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>(4.0, 4.5)</p></td>
+<td><p>(4.2, 4.8)</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>(5.4, 5.7)</p></td>
+<td><p>(5.5, 5.8)</p></td>
+</tr>
+</tbody>
+</table>
+<p>The first result was that everything was slower if I didn’t clear the cache. I have no explanation for this, and I didn’t spend time looking into it. Both flame graphs shared a similar appearance and so I included only a single graph here.</p>
+<a class="reference internal image-reference" href="../_images/tradeoffs_test_case5.png"><img alt="test case 5" src="../_images/tradeoffs_test_case5.png" style="width: 900px;" /></a>
+<p><em>The two dashed oval regions indicate the costs most easily attributable to encoding the varints in test case 5 (cold cache).</em></p>
+<p>As before, the smaller dashed oval region indicates costs that are directly attributable to the varint encoding process. These costs were consistently 1-2% of the overall time, similar to the earlier decoding costs.</p>
+<p>The larger dashed oval region is again more difficult to directly attribute to the choice of varint encoding. The method indicated by this region (<code class="docutils literal notranslate"><span class="pre">sqlite3BTreeLast</span></code>) is linked to adding a new row to a table. It’s partially needed because each integer (and hence row) can have a different size, and so it’s not possible to determine the location where each row ends without explicitly reading the data. As for the earlier test cases, it’s likely more correct to say that the choice of variable-length encoding is an important <em>driver</em> of costs, rather than the sole cause. The total costs for this method are between 10-12% of total run time.</p>
+</section>
+</section>
+<section id="compression">
+<h2>Compression<a class="headerlink" href="#compression" title="Permalink to this heading">#</a></h2>
+<p>Even though I do not regularly run into storage costs as a major limiter for my work, it’s interesting to have a quick check of the benefits that varint encoding can offer. The total size of Table 1 on disk is roughly 95MB and the total size of Table 2 184 MB. For a 64-bit signed integer data type, we would expect Table 1 to occupy roughly 160MB. If we assume each word is at most 20 characters and we use a fixed-size layout for representing text, then we would expect Table 2 to occupy 360MB. For the test cases, SQLite offers up to a 50% reduction in storage costs over a naive implementation using fixed-size data types.</p>
+<p>A more sophisticated analysis is to compare against Parquet, which is a ubiquitous data file format these days. A quick check (using <code class="docutils literal notranslate"><span class="pre">pandas</span></code>) shows that an uncompressed Parquet version of Table 1 is roughly 105MB, and that an uncompressed Parquet version of Table 2 is roughly 120MB. This shows that Table 2 can actually be stored far more compactly with the Parquet format than the SQLite format!</p>
+<p>These differences in the disk size of Table 2 can ultimately be traced back to another design decision - the choice of row vs columnar format. SQLite is primarily designed for fast online transaction processing (OLTP) and hence uses row format, whereas Parquet is designed for fast online analytical processing (OLAP) and so uses column format.</p>
+</section>
+<section id="final-thoughts">
+<h2>Final thoughts<a class="headerlink" href="#final-thoughts" title="Permalink to this heading">#</a></h2>
+<p>There are three primary factors to consider when using a variable-length integer encoding:</p>
+<ul class="simple">
+<li><p>Decoding speed</p></li>
+<li><p>Encoding speed</p></li>
+<li><p>Compression ratio (for the relevant distribution of integers)</p></li>
+</ul>
+<p>For the test cases that I considered, up to 15% of the total runtime of SQLite can be linked to the choice of variable-length encodings. Costs linked to variable-length integer encodings <em>specifically</em> are more modest, but can potentially approach 15% depending on the use-case. On the other hand, storage savings linked to the choice of variable-length integer encodings are considerable - there can be up to a 50% decrease over a fixed-size data type encoding.</p>
+<p>Perhaps surprisingly given that SQLite was designed with compression in mind, it can produce tables that are larger on disk than formats like Parquet. This can be traced to another design decision - SQLite’s primary focus is fast OLTP.</p>
+<p>My take-home message: don’t cargo-cult, and always consider the trade-offs for your use-case!</p>
 </section>
 </section>
 
