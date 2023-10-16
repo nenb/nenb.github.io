@@ -1,6 +1,6 @@
 ---
 title: Fragile Tests
-date: 2022-05-18
+date: 2023-10-16
 blogpost: true
 author: Nick Byrne
 category: Category
@@ -30,15 +30,20 @@ Talking about tests is difficult because so much of the terminology is overloade
 
 Let's imagine an API for retrieving employee names and their job in a company:
 ``` python
-# api.py
-from typing import Protocol
+from typing import Protocol, NewType
+
+
+Name = NewType('Name', str)
+Job = NewType('Job', str)
+Employees = dict[Name, Job]
+
 
 class EmployeeAPI(Protocol):
-    def read(self) -> dict[str, str]:
+    def read(self) -> Employees:
         ...
-    def insert(self, employee_info: dict[str, str]) -> None:
+    def insert(self, employees: Employees) -> None:
         ...
-    def delete(self, employee_name: str) -> None:
+    def delete(self, employees: Employees) -> None:
         ...
 ```
 
@@ -47,14 +52,13 @@ Let's also imagine a helper function `capitalise_employees_names`. A basic imple
 def capitalise_employees_names(api: EmployeeAPI) -> None:
     employees = api.read()
     
-    for employee, job in employees.items():
-        if employee[0] != employee[0].upper():
-            api.delete(employee)
-            employee_capitalised = employee[0].upper() + employee[1:]
-            api.insert({employee_capitalised: job})
+    uncapitalised_employee_info, capitalised_employee_info = _uncapitalised_and_capitalised(employees)
+    
+    api.delete(uncapitalised_employee_info)
+    api.insert(capitalised_employee_info)
 ```
 
-We can now ask the question: how do we test `capitalise_employees_names`?
+Here, `_uncapitalised_and_capitalised` is some private function that encapsulates our business logic and whose details are unimportant for this example. We can now ask the question: how do we test `capitalise_employees_names`?
 
 ### State verification
 
@@ -64,17 +68,18 @@ Returning to our example, we might create our fake employee API using a Python `
 ``` python
 class FakeEmployeeAPI:
     "A simplified implementation of EmployeeAPI"
-    def __init__(self, employees: dict[str, str]) -> None:
+    def __init__(self, employees: Employees) -> None:
         self._employees = employees
     
-    def read(self) -> dict[str, str]:
+    def read(self) -> Employees:
         return self._employees.copy()
     
-    def insert(self, employee_info: dict[str, str]) -> None:
-        self._employees.update(employee_info)
+    def insert(self, employees: Employees) -> None:
+        self._employees.update(employees)
         
-    def delete(self, employee_name: str)  -> None:
-        self._employees.pop(employee_name)
+    def delete(self, employees: Employees)  -> None:
+        for key in employees.keys():
+            self._employees.pop(key)
 ```
 
 Now we are ready to write our test:
@@ -110,7 +115,7 @@ class TestEmployeeAPIHelperFunctions(unittest.TestCase):
         capitalise_employees_names(mock_api)
 
         mock_api.read.assert_called_once()  # behaviour verification 
-        mock_api.delete.assert_called_once_with("john")  # behaviour verification
+        mock_api.delete.assert_called_once_with({"john": "sales"})  # behaviour verification
         mock_api.insert.assert_called_once_with({"John": "sales"})  # behaviour verification
 ```
 
@@ -120,7 +125,7 @@ It's far quicker to write this test compared to the previous test! The tradeoff 
 
 After some time (and several incidents involving the loss of employee details...) the `EmployeeAPI` is extended with an `update` method:
 ``` python
-def update(self, old_employee_info: dict[str, str], new_employee_info: dict[str, str]) -> None:
+def update(self, old_employee_info: Employees, new_employee_info: Employees) -> None:
     ...
 ```
 
@@ -128,11 +133,8 @@ def update(self, old_employee_info: dict[str, str], new_employee_info: dict[str,
 ``` python
 def capitalise_employees_names(api: EmployeeAPI) -> None:
     employees = api.read()
-    
-    for employee, job in employees.items():
-        if employee[0] != employee[0].upper():
-            employee_capitalised = employee[0].upper() + employee[1:]
-            api.update({employee: job}, {employee_capitalised: job})  # all changes now in a single API call!
+    old_employee_info, new_employee_info = _uncapitalised_and_capitalised(employees)
+    api.update(old_employee_info, new_employee_info)  # all changes now in a single API call!            
 ```
 
 What does this mean for the tests?
@@ -141,9 +143,9 @@ What does this mean for the tests?
 
 When the state-verification test suite is run after the code change, an error should be raised indicating that the fake employee API is missing an `update` method. This error is straightforward to understand (the `EmployeeAPI` interface has just been updated after all) and in this example there is a straightforward addition to our fake employee API:
 ``` python
-def update(self, old_employee_info: dict[str, str], new_employee_info: dict[str, str])  -> None:
-    old_employee_name, _ = old_employee_info.popitem()
-    self._employees.pop(old_employee_name)
+def update(self, old_employee_info: Employees, new_employee_info: Employees)  -> None:
+    for key in old_employee_info.keys():
+        self._employees.pop(key)
     self._employees.update(new_employee_info)
 ```
 
