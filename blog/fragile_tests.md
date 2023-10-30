@@ -1,9 +1,6 @@
 ---
 title: Fragile Tests
 date: 2023-10-16
-blogpost: true
-author: Nick Byrne
-category: Category
 ---
 
 # Fragile Tests

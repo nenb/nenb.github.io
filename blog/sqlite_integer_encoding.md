@@ -1,9 +1,6 @@
 ---
 title: Trade-offs
 date: 2023-10-11
-blogpost: true
-author: Nick Byrne
-category: Category
 ---
 
 # Trade-offs
