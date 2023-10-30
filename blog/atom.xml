@@ -2,17 +2,189 @@
 <feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
   <id>nenb.github.io</id>
   <title>Nick Byrne's Blog</title>
-  <updated>2023-10-16T11:01:41.865098+00:00</updated>
+  <updated>2023-10-30T12:59:16.319226+00:00</updated>
   <link href="nenb.github.io"/>
   <link href="nenb.github.io/blog/atom.xml" rel="self"/>
-  <generator uri="https://ablog.readthedocs.org/" version="0.10.33">ABlog</generator>
+  <generator uri="https://ablog.readthedocs.io/" version="0.11.6">ABlog</generator>
+  <entry>
+    <id>nenb.github.io/blog/fragile_tests.html</id>
+    <title>Fragile Tests</title>
+    <updated>2023-10-16T00:00:00+00:00</updated>
+    <content type="html">&lt;section id="fragile-tests"&gt;
+
+&lt;p&gt;&lt;em&gt;Inspired by a &lt;a class="reference external" href="https://twitter.com/hynek/status/1172034561959706624"&gt;tweet&lt;/a&gt; from Hynek Schlawack&lt;/em&gt;&lt;/p&gt;
+&lt;section id="why-do-we-test"&gt;
+&lt;h2&gt;Why do we test?&lt;/h2&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;&lt;p&gt;To check the correctness of our code&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;To document how our code should be used&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;To make maintaining and refactoring our code easier&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;There are many other valid reasons. But these three points are what I find myself continually coming back to.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="why-do-we-not-test"&gt;
+&lt;h2&gt;Why do we &lt;em&gt;not&lt;/em&gt; test?&lt;/h2&gt;
+&lt;p&gt;I’ll probably get a different answer to this question depending on the project that I’m working on. &lt;em&gt;Fragile tests&lt;/em&gt; is a reason I hear a lot though. I’m going to adopt a loose definition of test fragility here and define it as ‘tests that are easily broken by code changes’. Writing tests that rely on the implementation details of your code is a sure-fire way to end up with fragile tests.&lt;/p&gt;
+&lt;p&gt;In the Python world, I find the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt;&lt;/code&gt; decorator from the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;unittest&lt;/span&gt;&lt;/code&gt; library often leads to implementation-aware tests. &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt;&lt;/code&gt; is popular because it means less work in the test setup phase, but in my experience it’s usually at the cost of introducing fragile tests to your test suite.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="an-example"&gt;
+&lt;h2&gt;An example&lt;/h2&gt;
+&lt;p&gt;Talking about tests is difficult because so much of the terminology is overloaded. Martin Fowler’s &lt;a class="reference external" href="https://martinfowler.com/articles/mocksArentStubs.html"&gt;classic article&lt;/a&gt; is helpful for cutting through the noise. Martin identifies two approaches to testing: &lt;em&gt;state verification&lt;/em&gt; and &lt;em&gt;behaviour verification&lt;/em&gt;. By its very nature, behaviour verification is more closely coupled to implementation details than state verification. But it often requires far less preparation work - test fixtures are often much simpler or non-existent. We can see this more clearly with an example.&lt;/p&gt;
+&lt;p&gt;Let’s imagine an API for retrieving employee names and their job in a company:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;typing&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;Protocol&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;NewType&lt;/span&gt;
+
+
+&lt;span class="n"&gt;Name&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;NewType&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;Name&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="n"&gt;Job&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;NewType&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;Job&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="n"&gt;Employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;dict&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;Name&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;Job&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+
+
+&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;EmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Protocol&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;read&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="o"&gt;...&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;insert&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="o"&gt;...&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;delete&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="o"&gt;...&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;Let’s also imagine a helper function &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;capitalise_employees_names&lt;/span&gt;&lt;/code&gt;. A basic implementation might be:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;EmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="n"&gt;employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    
+    &lt;span class="n"&gt;uncapitalised_employee_info&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;capitalised_employee_info&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;_uncapitalised_and_capitalised&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    
+    &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;delete&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;uncapitalised_employee_info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;insert&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;capitalised_employee_info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;Here, &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;_uncapitalised_and_capitalised&lt;/span&gt;&lt;/code&gt; is some private function that encapsulates our business logic and whose details are unimportant for this example. We can now ask the question: how do we test &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;capitalise_employees_names&lt;/span&gt;&lt;/code&gt;?&lt;/p&gt;
+&lt;section id="state-verification"&gt;
+&lt;h3&gt;State verification&lt;/h3&gt;
+&lt;p&gt;Clearly it’s not reasonable to use the production &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;EmployeeAPI&lt;/span&gt;&lt;/code&gt; in a test suite that might be run every day. Where exactly should the ‘state’ to be verified come from then? My preferred solution is to use a &lt;a class="reference external" href="https://pythonspeed.com/articles/verified-fakes/"&gt;verified fake&lt;/a&gt; (when possible). The gist of the idea is to design a test fixture that represents a simplified version of the original object to be tested. This fixture then acts as the single, authoritative version of this object in the test suite.&lt;/p&gt;
+&lt;p&gt;Returning to our example, we might create our fake employee API using a Python &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;dict&lt;/span&gt;&lt;/code&gt;:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;FakeEmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="s2"&gt;&amp;quot;A simplified implementation of EmployeeAPI&amp;quot;&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="fm"&gt;__init__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;
+    
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;read&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;copy&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;insert&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;delete&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;key&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;keys&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+            &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;pop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;key&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;Now we are ready to write our test:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;pytest&lt;/span&gt;
+
+&lt;span class="nd"&gt;@pytest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;fixture&lt;/span&gt;
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;fake_api&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;FakeEmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Alice&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;legal&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;test_capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;fake_api&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;fake_api&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    
+    &lt;span class="n"&gt;employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fake_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    
+    &lt;span class="k"&gt;assert&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;John&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Alice&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;legal&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;  &lt;span class="c1"&gt;# state verification&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;/section&gt;
+&lt;section id="behaviour-verification"&gt;
+&lt;h3&gt;Behaviour verification&lt;/h3&gt;
+&lt;p&gt;With behaviour verification we don’t need to bother with writing any fake employee API. We can dive straight in to writing our test:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;unittest&lt;/span&gt;
+
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;unittest.mock&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;patch&lt;/span&gt;
+
+&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;TestEmployeeAPIHelperFunctions&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;unittest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TestCase&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    
+    &lt;span class="nd"&gt;@patch&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;api.EmployeeAPI&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;autospec&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="kc"&gt;True&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;test_capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;return_value&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Alice&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;legal&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="n"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification &lt;/span&gt;
+        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;delete&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once_with&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification&lt;/span&gt;
+        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;insert&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once_with&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;John&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;It’s far quicker to write this test compared to the previous test! The tradeoff is that our test is now more closely coupled to the implementation details and less readable.&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;
+&lt;section id="an-inevitable-code-change"&gt;
+&lt;h2&gt;An inevitable code change&lt;/h2&gt;
+&lt;p&gt;After some time (and several incidents involving the loss of employee details…) the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;EmployeeAPI&lt;/span&gt;&lt;/code&gt; is extended with an &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;update&lt;/span&gt;&lt;/code&gt; method:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;new_employee_info&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="o"&gt;...&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;&lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;capitalise_employees_names&lt;/span&gt;&lt;/code&gt; is also changed to take advantage of this improvement:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;EmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="n"&gt;employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;new_employee_info&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;_uncapitalised_and_capitalised&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;new_employee_info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  &lt;span class="c1"&gt;# all changes now in a single API call!            &lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;What does this mean for the tests?&lt;/p&gt;
+&lt;section id="id1"&gt;
+&lt;h3&gt;State verification&lt;/h3&gt;
+&lt;aside class="system-message"&gt;
+&lt;p class="system-message-title"&gt;System Message: INFO/1 (&lt;span class="docutils literal"&gt;/home/runner/work/nenb.github.io/nenb.github.io/blog/fragile_tests.md&lt;/span&gt;, line 139); &lt;em&gt;&lt;a href="#id1"&gt;backlink&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Duplicate implicit target name: “state verification”.&lt;/p&gt;
+&lt;/aside&gt;
+&lt;p&gt;When the state-verification test suite is run after the code change, an error should be raised indicating that the fake employee API is missing an &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;update&lt;/span&gt;&lt;/code&gt; method. This error is straightforward to understand (the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;EmployeeAPI&lt;/span&gt;&lt;/code&gt; interface has just been updated after all) and in this example there is a straightforward addition to our fake employee API:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;new_employee_info&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;key&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;keys&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;pop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;key&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;new_employee_info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;That’s it. No changes to the original test are required. And so long as our verified fake has an interface that matches the actual &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;EmployeeAPI&lt;/span&gt;&lt;/code&gt;, it should not matter how many tests we have written - we should not need to modify any of them. We can continue to easily use the tests to have confidence in our code, even though we might not understand every detail of how our code was written.&lt;/p&gt;
+&lt;/section&gt;
+&lt;section id="id2"&gt;
+&lt;h3&gt;Behaviour verification&lt;/h3&gt;
+&lt;aside class="system-message"&gt;
+&lt;p class="system-message-title"&gt;System Message: INFO/1 (&lt;span class="docutils literal"&gt;/home/runner/work/nenb.github.io/nenb.github.io/blog/fragile_tests.md&lt;/span&gt;, line 151); &lt;em&gt;&lt;a href="#id2"&gt;backlink&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Duplicate implicit target name: “behaviour verification”.&lt;/p&gt;
+&lt;/aside&gt;
+&lt;p&gt;For our behaviour-verification test suite, the code change is more problematic. The test suite should fail, and it should state that the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;delete&lt;/span&gt;&lt;/code&gt; method was not called. The only way to fix the test suite is to compare the implementation details for the old and new versions of &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;capitalise_employees_names&lt;/span&gt;&lt;/code&gt;, and to update the test accordingly. Of course, in this simple example the fixes are manageable:&lt;/p&gt;
+&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;TestEmployeeAPIHelperFunctions&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;unittest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TestCase&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    
+    &lt;span class="nd"&gt;@patch&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;api.EmployeeAPI&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;autospec&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="kc"&gt;True&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;test_capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;return_value&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Alice&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;legal&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="n"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification &lt;/span&gt;
+        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;update&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once_with&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;},&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;John&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p&gt;But this approach &lt;strong&gt;does not scale well&lt;/strong&gt; at all. Imagine a codebase with several such functions that have each been written by a different developer. The only way to fix the tests after a (perfectly valid) code change is to understand the implementation details of all functions and to fix them one-by-one. This leads to unhappy developers and ultimately, to ignoring the tests.&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;
+&lt;section id="final-thoughts"&gt;
+&lt;h2&gt;Final thoughts&lt;/h2&gt;
+&lt;p&gt;Software development is all about trade-offs. Software testing is no different.&lt;/p&gt;
+&lt;p&gt;Testing using behavioural verification is attractive because it’s quicker to get the tests written initially. The trade-off is a closer coupling to the implementation details of the code. The &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt;&lt;/code&gt; decorator from the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;unittest&lt;/span&gt;&lt;/code&gt; library in Python encourages writing tests that are coupled to implementation details.&lt;/p&gt;
+&lt;p&gt;Tests that are coupled to implementation details lead to fragile tests. And fragile tests ultimately harm the long-term development of a codebase - instead of easing the burden of code maintenance and refactors, they make it more difficult.&lt;/p&gt;
+&lt;p&gt;In my experience, to maintain a healthy codebase in Python avoid using the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt;&lt;/code&gt; decorator in your tests as much as possible.&lt;/p&gt;
+&lt;/section&gt;
+&lt;/section&gt;
+</content>
+    <link href="nenb.github.io/blog/fragile_tests.html" rel="alternate"/>
+    <summary>Inspired by a tweet from Hynek Schlawack</summary>
+    <published>2023-10-16T00:00:00+00:00</published>
+  </entry>
   <entry>
     <id>nenb.github.io/blog/sqlite_integer_encoding.html</id>
     <title>Trade-offs</title>
     <updated>2023-10-11T00:00:00+00:00</updated>
-    <author>
-      <name>Nick Byrne</name>
-    </author>
     <content type="html">&lt;section id="trade-offs"&gt;
 
 &lt;p&gt;&lt;em&gt;Some experimentation with SQLite and variable-length integer encoding&lt;/em&gt;&lt;/p&gt;
@@ -177,183 +349,5 @@
     <link href="nenb.github.io/blog/sqlite_integer_encoding.html" rel="alternate"/>
     <summary>Some experimentation with SQLite and variable-length integer encoding</summary>
     <published>2023-10-11T00:00:00+00:00</published>
-  </entry>
-  <entry>
-    <id>nenb.github.io/blog/fragile_tests.html</id>
-    <title>Fragile Tests</title>
-    <updated>2023-10-16T00:00:00+00:00</updated>
-    <author>
-      <name>Nick Byrne</name>
-    </author>
-    <content type="html">&lt;section id="fragile-tests"&gt;
-
-&lt;p&gt;&lt;em&gt;Inspired by a &lt;a class="reference external" href="https://twitter.com/hynek/status/1172034561959706624"&gt;tweet&lt;/a&gt; from Hynek Schlawack&lt;/em&gt;&lt;/p&gt;
-&lt;section id="why-do-we-test"&gt;
-&lt;h2&gt;Why do we test?&lt;/h2&gt;
-&lt;ul class="simple"&gt;
-&lt;li&gt;&lt;p&gt;To check the correctness of our code&lt;/p&gt;&lt;/li&gt;
-&lt;li&gt;&lt;p&gt;To document how our code should be used&lt;/p&gt;&lt;/li&gt;
-&lt;li&gt;&lt;p&gt;To make maintaining and refactoring our code easier&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;There are many other valid reasons. But these three points are what I find myself continually coming back to.&lt;/p&gt;
-&lt;/section&gt;
-&lt;section id="why-do-we-not-test"&gt;
-&lt;h2&gt;Why do we &lt;em&gt;not&lt;/em&gt; test?&lt;/h2&gt;
-&lt;p&gt;I’ll probably get a different answer to this question depending on the project that I’m working on. &lt;em&gt;Fragile tests&lt;/em&gt; is a reason I hear a lot though. I’m going to adopt a loose definition of test fragility here and define it as ‘tests that are easily broken by code changes’. Writing tests that rely on the implementation details of your code is a sure-fire way to end up with fragile tests.&lt;/p&gt;
-&lt;p&gt;In the Python world, I find the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt;&lt;/code&gt; decorator from the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;unittest&lt;/span&gt;&lt;/code&gt; library often leads to implementation-aware tests. &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt;&lt;/code&gt; is popular because it means less work in the test setup phase, but in my experience it’s usually at the cost of introducing fragile tests to your test suite.&lt;/p&gt;
-&lt;/section&gt;
-&lt;section id="an-example"&gt;
-&lt;h2&gt;An example&lt;/h2&gt;
-&lt;p&gt;Talking about tests is difficult because so much of the terminology is overloaded. Martin Fowler’s &lt;a class="reference external" href="https://martinfowler.com/articles/mocksArentStubs.html"&gt;classic article&lt;/a&gt; is helpful for cutting through the noise. Martin identifies two approaches to testing: &lt;em&gt;state verification&lt;/em&gt; and &lt;em&gt;behaviour verification&lt;/em&gt;. By its very nature, behaviour verification is more closely coupled to implementation details than state verification. But it often requires far less preparation work - test fixtures are often much simpler or non-existent. We can see this more clearly with an example.&lt;/p&gt;
-&lt;p&gt;Let’s imagine an API for retrieving employee names and their job in a company:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;typing&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;Protocol&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;NewType&lt;/span&gt;
-
-
-&lt;span class="n"&gt;Name&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;NewType&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;Name&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="n"&gt;Job&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;NewType&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;Job&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="n"&gt;Employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;dict&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;Name&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;Job&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
-
-
-&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;EmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Protocol&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;read&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-        &lt;span class="o"&gt;...&lt;/span&gt;
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;insert&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-        &lt;span class="o"&gt;...&lt;/span&gt;
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;delete&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-        &lt;span class="o"&gt;...&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;p&gt;Let’s also imagine a helper function &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;capitalise_employees_names&lt;/span&gt;&lt;/code&gt;. A basic implementation might be:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;EmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-    &lt;span class="n"&gt;employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
-    
-    &lt;span class="n"&gt;uncapitalised_employee_info&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;capitalised_employee_info&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;_uncapitalised_and_capitalised&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-    
-    &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;delete&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;uncapitalised_employee_info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-    &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;insert&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;capitalised_employee_info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;p&gt;Here, &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;_uncapitalised_and_capitalised&lt;/span&gt;&lt;/code&gt; is some private function that encapsulates our business logic and whose details are unimportant for this example. We can now ask the question: how do we test &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;capitalise_employees_names&lt;/span&gt;&lt;/code&gt;?&lt;/p&gt;
-&lt;section id="state-verification"&gt;
-&lt;h3&gt;State verification&lt;/h3&gt;
-&lt;p&gt;Clearly it’s not reasonable to use the production &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;EmployeeAPI&lt;/span&gt;&lt;/code&gt; in a test suite that might be run every day. Where exactly should the ‘state’ to be verified come from then? My preferred solution is to use a &lt;a class="reference external" href="https://pythonspeed.com/articles/verified-fakes/"&gt;verified fake&lt;/a&gt; (when possible). The gist of the idea is to design a test fixture that represents a simplified version of the original object to be tested. This fixture then acts as the single, authoritative version of this object in the test suite.&lt;/p&gt;
-&lt;p&gt;Returning to our example, we might create our fake employee API using a Python &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;dict&lt;/span&gt;&lt;/code&gt;:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;FakeEmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-    &lt;span class="s2"&gt;&amp;quot;A simplified implementation of EmployeeAPI&amp;quot;&lt;/span&gt;
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="fm"&gt;__init__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;
-    
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;read&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;copy&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
-    
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;insert&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-        
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;delete&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;key&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;keys&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
-            &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;pop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;key&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;p&gt;Now we are ready to write our test:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;pytest&lt;/span&gt;
-
-&lt;span class="nd"&gt;@pytest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;fixture&lt;/span&gt;
-&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;fake_api&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
-    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;FakeEmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Alice&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;legal&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;
-
-&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;test_capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;fake_api&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
-    &lt;span class="n"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;fake_api&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-    
-    &lt;span class="n"&gt;employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fake_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
-    
-    &lt;span class="k"&gt;assert&lt;/span&gt; &lt;span class="n"&gt;employees&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;John&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Alice&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;legal&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;  &lt;span class="c1"&gt;# state verification&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;/section&gt;
-&lt;section id="behaviour-verification"&gt;
-&lt;h3&gt;Behaviour verification&lt;/h3&gt;
-&lt;p&gt;With behaviour verification we don’t need to bother with writing any fake employee API. We can dive straight in to writing our test:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;unittest&lt;/span&gt;
-
-&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;unittest.mock&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;patch&lt;/span&gt;
-
-&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;TestEmployeeAPIHelperFunctions&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;unittest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TestCase&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
-    
-    &lt;span class="nd"&gt;@patch&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;api.EmployeeAPI&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;autospec&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="kc"&gt;True&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;test_capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
-        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;return_value&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Alice&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;legal&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;
-        &lt;span class="n"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-
-        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification &lt;/span&gt;
-        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;delete&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once_with&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification&lt;/span&gt;
-        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;insert&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once_with&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;John&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;p&gt;It’s far quicker to write this test compared to the previous test! The tradeoff is that our test is now more closely coupled to the implementation details and less readable.&lt;/p&gt;
-&lt;/section&gt;
-&lt;/section&gt;
-&lt;section id="an-inevitable-code-change"&gt;
-&lt;h2&gt;An inevitable code change&lt;/h2&gt;
-&lt;p&gt;After some time (and several incidents involving the loss of employee details…) the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;EmployeeAPI&lt;/span&gt;&lt;/code&gt; is extended with an &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;update&lt;/span&gt;&lt;/code&gt; method:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;new_employee_info&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-    &lt;span class="o"&gt;...&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;p&gt;&lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;capitalise_employees_names&lt;/span&gt;&lt;/code&gt; is also changed to take advantage of this improvement:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;EmployeeAPI&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-    &lt;span class="n"&gt;employees&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
-    &lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;new_employee_info&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;_uncapitalised_and_capitalised&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-    &lt;span class="n"&gt;api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;new_employee_info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  &lt;span class="c1"&gt;# all changes now in a single API call!            &lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;p&gt;What does this mean for the tests?&lt;/p&gt;
-&lt;section id="id1"&gt;
-&lt;h3&gt;State verification&lt;/h3&gt;
-&lt;aside class="system-message"&gt;
-&lt;p class="system-message-title"&gt;System Message: INFO/1 (&lt;span class="docutils literal"&gt;/home/runner/work/nenb.github.io/nenb.github.io/blog/fragile_tests.md&lt;/span&gt;, line 142); &lt;em&gt;&lt;a href="#id1"&gt;backlink&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;Duplicate implicit target name: “state verification”.&lt;/p&gt;
-&lt;/aside&gt;
-&lt;p&gt;When the state-verification test suite is run after the code change, an error should be raised indicating that the fake employee API is missing an &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;update&lt;/span&gt;&lt;/code&gt; method. This error is straightforward to understand (the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;EmployeeAPI&lt;/span&gt;&lt;/code&gt; interface has just been updated after all) and in this example there is a straightforward addition to our fake employee API:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;new_employee_info&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Employees&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
-    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;key&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;old_employee_info&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;keys&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
-        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;pop&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;key&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-    &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_employees&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;new_employee_info&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;p&gt;That’s it. No changes to the original test are required. And so long as our verified fake has an interface that matches the actual &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;EmployeeAPI&lt;/span&gt;&lt;/code&gt;, it should not matter how many tests we have written - we should not need to modify any of them. We can continue to easily use the tests to have confidence in our code, even though we might not understand every detail of how our code was written.&lt;/p&gt;
-&lt;/section&gt;
-&lt;section id="id2"&gt;
-&lt;h3&gt;Behaviour verification&lt;/h3&gt;
-&lt;aside class="system-message"&gt;
-&lt;p class="system-message-title"&gt;System Message: INFO/1 (&lt;span class="docutils literal"&gt;/home/runner/work/nenb.github.io/nenb.github.io/blog/fragile_tests.md&lt;/span&gt;, line 154); &lt;em&gt;&lt;a href="#id2"&gt;backlink&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;Duplicate implicit target name: “behaviour verification”.&lt;/p&gt;
-&lt;/aside&gt;
-&lt;p&gt;For our behaviour-verification test suite, the code change is more problematic. The test suite should fail, and it should state that the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;delete&lt;/span&gt;&lt;/code&gt; method was not called. The only way to fix the test suite is to compare the implementation details for the old and new versions of &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;capitalise_employees_names&lt;/span&gt;&lt;/code&gt;, and to update the test accordingly. Of course, in this simple example the fixes are manageable:&lt;/p&gt;
-&lt;div class="highlight-python notranslate"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;TestEmployeeAPIHelperFunctions&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;unittest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TestCase&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
-    
-    &lt;span class="nd"&gt;@patch&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;api.EmployeeAPI&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;autospec&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="kc"&gt;True&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;test_capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
-        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;return_value&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Alice&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;legal&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;
-        &lt;span class="n"&gt;capitalise_employees_names&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-
-        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;read&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification &lt;/span&gt;
-        &lt;span class="n"&gt;mock_api&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;update&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_called_once_with&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;john&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;},&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;John&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;sales&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;  &lt;span class="c1"&gt;# behaviour verification&lt;/span&gt;
-&lt;/pre&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;p&gt;But this approach &lt;strong&gt;does not scale well&lt;/strong&gt; at all. Imagine a codebase with several such functions that have each been written by a different developer. The only way to fix the tests after a (perfectly valid) code change is to understand the implementation details of all functions and to fix them one-by-one. This leads to unhappy developers and ultimately, to ignoring the tests.&lt;/p&gt;
-&lt;/section&gt;
-&lt;/section&gt;
-&lt;section id="final-thoughts"&gt;
-&lt;h2&gt;Final thoughts&lt;/h2&gt;
-&lt;p&gt;Software development is all about trade-offs. Software testing is no different.&lt;/p&gt;
-&lt;p&gt;Testing using behavioural verification is attractive because it’s quicker to get the tests written initially. The trade-off is a closer coupling to the implementation details of the code. The &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt;&lt;/code&gt; decorator from the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;unittest&lt;/span&gt;&lt;/code&gt; library in Python encourages writing tests that are coupled to implementation details.&lt;/p&gt;
-&lt;p&gt;Tests that are coupled to implementation details lead to fragile tests. And fragile tests ultimately harm the long-term development of a codebase - instead of easing the burden of code maintenance and refactors, they make it more difficult.&lt;/p&gt;
-&lt;p&gt;In my experience, to maintain a healthy codebase in Python avoid using the &lt;code class="docutils literal notranslate"&gt;&lt;span class="pre"&gt;patch&lt;/span&gt;&lt;/code&gt; decorator in your tests as much as possible.&lt;/p&gt;
-&lt;/section&gt;
-&lt;/section&gt;
-</content>
-    <link href="nenb.github.io/blog/fragile_tests.html" rel="alternate"/>
-    <summary>Inspired by a tweet from Hynek Schlawack</summary>
-    <published>2023-10-16T00:00:00+00:00</published>
   </entry>
 </feed>
