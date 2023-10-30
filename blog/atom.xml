@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
   <id>nenb.github.io</id>
   <title>Nick Byrne's Blog</title>
-  <updated>2023-10-30T12:59:16.319226+00:00</updated>
+  <updated>2023-10-30T13:05:34.181981+00:00</updated>
   <link href="nenb.github.io"/>
   <link href="nenb.github.io/blog/atom.xml" rel="self"/>
   <generator uri="https://ablog.readthedocs.io/" version="0.11.6">ABlog</generator>
