@@ -29,6 +29,7 @@ html_theme_options = {
     "github_url": "https://github.com/nenb/",
     "twitter_url": "https://twitter.com/_nenb",
     "search_bar_text": "Search ...",
+    "analytics": {"google_analytics_id": "G-SVE93TNGLN"},
     "navbar_end": ["search-field.html", "theme-switcher", "navbar-icon-links"],
     "page_sidebar_items": [],
     "icon_links": [
