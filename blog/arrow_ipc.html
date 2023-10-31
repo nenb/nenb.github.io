@@ -1,0 +1,714 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+<meta property="og:title" content="Apache Arrow IPC" />
+  
+<meta property="og:type" content="website" />
+  
+<meta property="og:url" content="blog/arrow_ipc.html" />
+  
+<meta property="og:description" content="TIL: How to serialize data with Apache Arrow The Apache Arrow project uses the Arrow IPC message format for communication of Arrow columnar data across processes and machines. The format relies on ..." />
+  
+<meta property="og:image" content="nenb.github.io/_static/profile.jpg" />
+  
+<meta property="og:image:alt" content="Apache Arrow IPC" />
+  
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=796348d33e8b1d947c94" rel="stylesheet">
+<link href="../_static/styles/bootstrap.css?digest=796348d33e8b1d947c94" rel="stylesheet">
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=796348d33e8b1d947c94" rel="stylesheet">
+
+  
+  <link href="../_static/vendor/fontawesome/6.1.2/css/all.min.css?digest=796348d33e8b1d947c94" rel="stylesheet">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-solid-900.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-brands-400.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-regular-400.woff2">
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-dropdown.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/panels-bootstrap.min.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=796348d33e8b1d947c94">
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=796348d33e8b1d947c94">
+
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/sphinx_highlight.js"></script>
+    <script async="async" src="https://www.googletagmanager.com/gtag/js?id=G-SVE93TNGLN"></script>
+    <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){ dataLayer.push(arguments); }
+                gtag('js', new Date());
+                gtag('config', 'G-SVE93TNGLN');
+            </script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'blog/arrow_ipc';</script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="docsearch:language" content="en">
+
+<link
+  rel="alternate"
+  type="application/atom+xml"
+  href="../blog/atom.xml"
+  title="Nick Byrne's Blog"
+/>
+
+
+
+  </head>
+  
+  
+  <body data-spy="scroll" data-target="#bd-toc-nav" data-offset="180" data-default-mode="">
+
+  
+  
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  
+  <input type="checkbox" class="sidebar-toggle" name="__primary" id="__primary">
+  <label class="overlay overlay-primary" for="__primary"></label>
+
+  
+  <input type="checkbox" class="sidebar-toggle" name="__secondary" id="__secondary">
+  <label class="overlay overlay-secondary" for="__secondary"></label>
+
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+      
+<form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" class="form-control" name="q" id="search-input" placeholder="Search ..." aria-label="Search ..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+    </div>
+  </div>
+
+  
+  <nav class="bd-header navbar navbar-expand-lg bd-navbar" id="navbar-main"><div class="bd-header__inner bd-page-width">
+  <label class="sidebar-toggle primary-toggle" for="__primary">
+      <span class="fa-solid fa-bars"></span>
+  </label>
+  <div id="navbar-start">
+    
+    
+  
+
+
+<a class="navbar-brand logo" href="../index.html">
+
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+    <p class="title logo__title">Homepage</p>
+  
+</a>
+    
+  </div>
+
+  
+  <div class="col-lg-9 navbar-header-items">
+    <div id="navbar-center" class="mr-auto">
+      
+      <div class="navbar-center-item">
+        <nav class="navbar-nav">
+    <p class="sidebar-header-items__title" role="heading" aria-level="1" aria-label="Site Navigation">
+        Site Navigation
+    </p>
+    <ul id="navbar-main-elements" class="navbar-nav">
+        
+    </ul>
+</nav>
+      </div>
+      
+    </div>
+
+    <div id="navbar-end">
+      
+        <div class="navbar-end-item navbar-persistent--container">
+          
+<button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-toggle="tooltip">
+  <i class="fa-solid fa-magnifying-glass"></i>
+</button>
+        </div>
+      
+      
+      <div class="navbar-end-item">
+        
+<form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" class="form-control" name="q" id="search-input" placeholder="Search ..." aria-label="Search ..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+      </div>
+      
+      <div class="navbar-end-item">
+        <button class="theme-switch-button btn btn-sm btn-outline-primary navbar-btn rounded-circle" title="light/dark" aria-label="light/dark" data-toggle="tooltip">
+    <span class="theme-switch" data-mode="light"><i class="fa-solid fa-sun"></i></span>
+    <span class="theme-switch" data-mode="dark"><i class="fa-solid fa-moon"></i></span>
+    <span class="theme-switch" data-mode="auto"><i class="fa-solid fa-circle-half-stroke"></i></span>
+</button>
+      </div>
+      
+      <div class="navbar-end-item">
+        <ul id="navbar-icon-links" class="navbar-nav" aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/nenb/" title="GitHub" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-square-github"></i></span>
+            <label class="sr-only">GitHub</label></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://twitter.com/_nenb" title="Twitter" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-square-twitter"></i></span>
+            <label class="sr-only">Twitter</label></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://mastodon.top/@nenb" title="Mastodon" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-mastodon"></i></span>
+            <label class="sr-only">Mastodon</label></a>
+        </li>
+      </ul>
+      </div>
+      
+    </div>
+  </div>
+
+
+  
+  
+    <div class="navbar-persistent--mobile">
+<button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-toggle="tooltip">
+  <i class="fa-solid fa-magnifying-glass"></i>
+</button>
+    </div>
+  
+
+  
+
+</div>
+  </nav>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+      
+      <div class="navbar-center-item">
+        <nav class="navbar-nav">
+    <p class="sidebar-header-items__title" role="heading" aria-level="1" aria-label="Site Navigation">
+        Site Navigation
+    </p>
+    <ul id="navbar-main-elements" class="navbar-nav">
+        
+    </ul>
+</nav>
+      </div>
+      
+      </div>
+    
+
+    
+    
+    <div class="sidebar-header-items__end">
+      
+      <div class="navbar-end-item">
+        
+<form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" class="form-control" name="q" id="search-input" placeholder="Search ..." aria-label="Search ..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+      </div>
+      
+      <div class="navbar-end-item">
+        <button class="theme-switch-button btn btn-sm btn-outline-primary navbar-btn rounded-circle" title="light/dark" aria-label="light/dark" data-toggle="tooltip">
+    <span class="theme-switch" data-mode="light"><i class="fa-solid fa-sun"></i></span>
+    <span class="theme-switch" data-mode="dark"><i class="fa-solid fa-moon"></i></span>
+    <span class="theme-switch" data-mode="auto"><i class="fa-solid fa-circle-half-stroke"></i></span>
+</button>
+      </div>
+      
+      <div class="navbar-end-item">
+        <ul id="navbar-icon-links" class="navbar-nav" aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/nenb/" title="GitHub" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-square-github"></i></span>
+            <label class="sr-only">GitHub</label></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://twitter.com/_nenb" title="Twitter" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-square-twitter"></i></span>
+            <label class="sr-only">Twitter</label></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://mastodon.top/@nenb" title="Mastodon" class="nav-link" rel="noopener" target="_blank" data-toggle="tooltip"><span><i class="fa-brands fa-mastodon"></i></span>
+            <label class="sr-only">Mastodon</label></a>
+        </li>
+      </ul>
+      </div>
+      
+    </div>
+    
+  </div>
+
+  
+  <div class="sidebar-start-items sidebar-primary__section">
+    <div class="sidebar-start-items__item">
+<div class="ablog-sidebar-item ablog__postcard">
+
+
+<h2>
+  
+  
+  <i class="fa fa-calendar"></i>
+  
+  31 October 2023
+  
+</h2>
+<ul>
+  <div class="ablog-sidebar-item ablog__postcard2">
+
+
+
+
+
+
+<li id="ablog-sidebar-item tags ablog__tags">
+  <span>
+    
+    
+    <i class="fa-fw fa fa-tag"></i>
+    
+    </span>
+  
+  
+  <a href="tag/til.html">TIL</a>
+  
+  
+  
+</li>
+
+
+</div>
+</ul>
+</div>
+
+    </div>
+    <div class="sidebar-start-items__item">
+<div class="ablog-sidebar-item ablog__recentposts">
+<h3>
+  <a href="../blog.html">Recent Posts</a>
+</h3>
+<ul>
+  
+  
+  <li>
+    <a href="fragile_tests.html">
+      16 October - Fragile Tests
+    </a>
+  </li>
+  
+  <li>
+    <a href="sqlite_integer_encoding.html">
+      11 October - Trade-offs
+    </a>
+  </li>
+  
+</ul>
+</div>
+
+    </div>
+    <div class="sidebar-start-items__item">
+<div class="ablog-sidebar-item ablog__archive">
+<h3>
+  <a href="archive.html">Archives</a>
+</h3>
+<ul>
+  
+  
+  <li>
+    <a href="2023.html">2023 (3)</a>
+  </li>
+  
+  
+</ul>
+</div>
+
+    </div>
+  </div>
+  
+
+  
+  <div class="sidebar-end-items sidebar-primary__section">
+    <div class="sidebar-end-items__item">
+    </div>
+  </div>
+
+  
+  <div id="rtd-footer-container"></div>
+
+      </div>
+      <main id="main-content" class="bd-main">
+        
+        
+        <div class="bd-content">
+          <div class="bd-article-container">
+            
+            <div class="bd-header-article">
+                
+            </div>
+            
+            
+
+
+            <article class="bd-article" role="main">
+              
+<section id="apache-arrow-ipc">
+<h1>Apache Arrow IPC<a class="headerlink" href="#apache-arrow-ipc" title="Permalink to this heading">#</a></h1>
+<p><strong><em>TIL</em></strong>: <em>How to serialize data with Apache Arrow</em></p>
+<p>The Apache Arrow project uses the Arrow IPC message format for communication of Arrow columnar data across processes and machines. The format relies on <a class="reference external" href="https://flatbuffers.dev/">Flatbuffers</a> to serialize schemas and other metadata, but uses the Arrow columnar representation for transmitting the actual data arrays. This TIL describes in reasonable detail how to construct valid Arrow IPC messages. It is based on material from the official <a class="reference external" href="https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc">documentation</a>.</p>
+<section id="encapsulated-binary-message-format">
+<h2>Encapsulated Binary Message Format<a class="headerlink" href="#encapsulated-binary-message-format" title="Permalink to this heading">#</a></h2>
+<p>Arrow defines an encapsulated binary message format as being composed of bit flags, Flatbuffer serialised metadata, Arrow data arrays and padding. More precisely, an encapsulated binary message is structured according to the following sequence:</p>
+<img alt="test case 2" src="../_images/message.png" />
+<p><em>The Arrow encapsulated binary message format</em></p>
+<p>The Flatbuffer definition files are available from the Arrow <a class="reference external" href="https://github.com/apache/arrow/tree/main/format">repository</a>. As of October 2023, the relevant files are <code class="docutils literal notranslate"><span class="pre">Message.fbs</span></code>, <code class="docutils literal notranslate"><span class="pre">Schema.fbs</span></code>, <code class="docutils literal notranslate"><span class="pre">Tensor.fbs</span></code> and <code class="docutils literal notranslate"><span class="pre">SparseTensor.fbs</span></code>. These files contain all the definitions that are required for serialising schemas and metadata for the IPC format. The definitions can be extended (<code class="docutils literal notranslate"><span class="pre">Tensor.fbs</span></code> and <code class="docutils literal notranslate"><span class="pre">SparseTensor.fbs</span></code> were created in this way) but the format should remain backwards compatible.</p>
+<p>Perhaps the simplest example of such a binary message is produced by serialising a ‘null’ schema. This schema has no column names or data types. The binary payload for this message looks like:</p>
+<a class="reference internal image-reference" href="../_images/schema.png"><img alt="test case 2" src="../_images/schema.png" style="width: 900px;" /></a>
+<p><em>Binary payload for the ‘null’ schema</em></p>
+<p>I will only highlight the parts of this binary message that are particularly relevant to the encapsulated message format (for more details on Flatbuffers, root tables and vtables see <a class="reference external" href="https://github.com/mzaks/FlatBuffersSwift/wiki/FlatBuffers-Explained">here</a>). The first 8 bytes contain the bit flag to indicate the start of the message as well as the total size of the metadata in bytes. The remaining 48 bytes contain information that has been derived from the <code class="docutils literal notranslate"><span class="pre">Message.fbs</span></code> and <code class="docutils literal notranslate"><span class="pre">Schema.fbs</span></code> files. Byte 29 is important as it indicates that the subsequent binary payload has been produced using the ‘Schema’ message type (see the <code class="docutils literal notranslate"><span class="pre">MessageHeader</span></code> type in <code class="docutils literal notranslate"><span class="pre">Message.fbs</span></code> for more details). Byte 30 is important as it indicates the version of the format to use.</p>
+<p>To produce this binary message from scratch, it’s necessary to first compile the Flatbuffers definition files using the <a class="reference external" href="https://flatbuffers.dev/flatbuffers_guide_building.html"><code class="docutils literal notranslate"><span class="pre">flatc</span></code></a> schema compiler. I did this for Python and reproduced the binary message using the following code:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">flatbuffers</span>
+<span class="kn">from</span> <span class="nn">org.apache.arrow.flatbuf</span> <span class="kn">import</span> <span class="n">Message</span><span class="p">,</span> <span class="n">Schema</span>
+
+<span class="c1"># Serialising: pyarrow.schema([])</span>
+
+<span class="n">builder</span> <span class="o">=</span> <span class="n">flatbuffers</span><span class="o">.</span><span class="n">Builder</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+
+<span class="c1"># construct Schema - see Schema.fbs</span>
+<span class="n">Schema</span><span class="o">.</span><span class="n">SchemaStartFieldsVector</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">field</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">EndVector</span><span class="p">()</span>
+<span class="n">Schema</span><span class="o">.</span><span class="n">SchemaStart</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">Schema</span><span class="o">.</span><span class="n">SchemaAddFields</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">field</span><span class="p">)</span>
+<span class="n">Schema</span><span class="o">.</span><span class="n">SchemaAddEndianness</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">schema</span> <span class="o">=</span> <span class="n">Schema</span><span class="o">.</span><span class="n">SchemaEnd</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+
+<span class="c1"># construct Message - see Message.fbs</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageStart</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddHeader</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddVersion</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddHeaderType</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">message</span> <span class="o">=</span> <span class="n">Message</span><span class="o">.</span><span class="n">MessageEnd</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">builder</span><span class="o">.</span><span class="n">Finish</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="streaming-protocol">
+<h2>Streaming Protocol<a class="headerlink" href="#streaming-protocol" title="Permalink to this heading">#</a></h2>
+<p>(<strong>Note:</strong> <em>The following two paragraphs are taken directly from the Arrow IPC documentation</em>)</p>
+<p>The streaming protocol is presented as a sequence of encapsulated messages. The <em>schema encapsulated message</em> comes first in the stream, and it follows the format outlined above. The schema is the same for all of the encapsulated messages that follow. If any fields in the schema are dictionary-encoded, one or more DictionaryBatch messages will be included. DictionaryBatch and RecordBatch messages may be interleaved, but before any dictionary key is used in a RecordBatch it should be defined in a DictionaryBatch.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">SCHEMA</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">DICTIONARY</span> <span class="mi">0</span><span class="o">&gt;</span>
+<span class="o">...</span>
+<span class="o">&lt;</span><span class="n">DICTIONARY</span> <span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">RECORD</span> <span class="n">BATCH</span> <span class="mi">0</span><span class="o">&gt;</span>
+<span class="o">...</span>
+<span class="o">&lt;</span><span class="n">DICTIONARY</span> <span class="n">x</span> <span class="n">DELTA</span><span class="o">&gt;</span>
+<span class="o">...</span>
+<span class="o">&lt;</span><span class="n">DICTIONARY</span> <span class="n">y</span> <span class="n">DELTA</span><span class="o">&gt;</span>
+<span class="o">...</span>
+<span class="o">&lt;</span><span class="n">RECORD</span> <span class="n">BATCH</span> <span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">EOS</span> <span class="p">[</span><span class="n">optional</span><span class="p">]:</span> <span class="mh">0xFFFFFFFF</span> <span class="mh">0x00000000</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>When a stream reader implementation is reading a stream, after each message, it may read the next 8 bytes to determine both if the stream continues and the size of the message metadata that follows. The stream writer can signal end-of-stream (EOS) either by writing 8 bytes containing the 4-byte continuation indicator (0xFFFFFFFF) followed by 0 metadata length (0x00000000) or closing the stream interface. We recommend the “.arrows” file extension for the streaming format although in many cases these streams will not ever be stored as files.</p>
+<p><strong>Arrow IPC involves creating a series of encapsulated binary messages and then sending them in the order outlined by the streaming protocol.</strong></p>
+<section id="an-example">
+<h3>An example<a class="headerlink" href="#an-example" title="Permalink to this heading">#</a></h3>
+<p>I will attempt to explain the streaming protocol in more detail by serialising an Arrow array containing a single <code class="docutils literal notranslate"><span class="pre">int32</span></code> value, and whose column name is <code class="docutils literal notranslate"><span class="pre">my_column_name</span></code>. To do this, I first have to produce a schema message. The code for this is similar to the code at the beginning of this TIL (but note that here the binary payload needs to be padded with an extra 4 bytes to match the Arrow encapsulated message format definition):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">org.apache.arrow.flatbuf</span> <span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">Int</span>
+
+<span class="c1"># Serialising: pa.schema([(&#39;my_column_name&#39;, pa.int32())]) </span>
+
+<span class="n">builder</span> <span class="o">=</span> <span class="n">flatbuffers</span><span class="o">.</span><span class="n">Builder</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+
+<span class="c1"># construct Schema</span>
+<span class="n">Int</span><span class="o">.</span><span class="n">IntStart</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">Int</span><span class="o">.</span><span class="n">IntAddBitWidth</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span>
+<span class="n">Int</span><span class="o">.</span><span class="n">IntAddIsSigned</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<span class="n">int_type</span> <span class="o">=</span> <span class="n">Int</span><span class="o">.</span><span class="n">IntEnd</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">column_one</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">CreateString</span><span class="p">(</span><span class="s1">&#39;my_column_name&#39;</span><span class="p">)</span>
+<span class="n">Field</span><span class="o">.</span><span class="n">FieldStartChildrenVector</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">child</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">EndVector</span><span class="p">()</span>
+<span class="n">Field</span><span class="o">.</span><span class="n">FieldStart</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">Field</span><span class="o">.</span><span class="n">FieldAddChildren</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">child</span><span class="p">)</span>
+<span class="n">Field</span><span class="o">.</span><span class="n">FieldAddType</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">int_type</span><span class="p">)</span>
+<span class="n">Field</span><span class="o">.</span><span class="n">FieldAddName</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">column_one</span><span class="p">)</span>
+<span class="n">Field</span><span class="o">.</span><span class="n">FieldAddTypeType</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">Field</span><span class="o">.</span><span class="n">FieldAddNullable</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<span class="n">array_field</span> <span class="o">=</span> <span class="n">Field</span><span class="o">.</span><span class="n">FieldEnd</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">Schema</span><span class="o">.</span><span class="n">SchemaStartFieldsVector</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">builder</span><span class="o">.</span><span class="n">PrependUOffsetTRelative</span><span class="p">(</span><span class="n">array_field</span><span class="p">)</span>
+<span class="n">field</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">EndVector</span><span class="p">()</span>
+<span class="n">Schema</span><span class="o">.</span><span class="n">SchemaStart</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">Schema</span><span class="o">.</span><span class="n">SchemaAddFields</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">field</span><span class="p">)</span>
+<span class="n">Schema</span><span class="o">.</span><span class="n">SchemaAddEndianness</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">schema</span> <span class="o">=</span> <span class="n">Schema</span><span class="o">.</span><span class="n">SchemaEnd</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+
+<span class="c1"># construct Message</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageStart</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddHeader</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddVersion</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddHeaderType</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">message</span> <span class="o">=</span> <span class="n">Message</span><span class="o">.</span><span class="n">MessageEnd</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">builder</span><span class="o">.</span><span class="n">Finish</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+<span class="c1"># 4 bytes should be appended to end of message to achieve 8 byte boundary</span>
+</pre></div>
+</div>
+<p>Next, I need to produce a record batch message. This message is then followed by the actual data arrays in the Arrow format:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">org.apache.arrow.flatbuf</span> <span class="kn">import</span> <span class="n">Buffer</span><span class="p">,</span> <span class="n">FieldNode</span><span class="p">,</span> <span class="n">RecordBatch</span>
+
+<span class="c1"># Serialising: pyarrow.record_batch([pyarrow.array([1,], type=pyarrow.int32()),], names=[&#39;my_column_name&#39;])</span>
+
+<span class="n">builder</span> <span class="o">=</span> <span class="n">flatbuffers</span><span class="o">.</span><span class="n">Builder</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+
+<span class="c1"># construct RecordBatch</span>
+<span class="n">RecordBatch</span><span class="o">.</span><span class="n">RecordBatchStartNodesVector</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">FieldNode</span><span class="o">.</span><span class="n">CreateFieldNode</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">node</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">EndVector</span><span class="p">()</span>
+<span class="n">RecordBatch</span><span class="o">.</span><span class="n">RecordBatchStartBuffersVector</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">Buffer</span><span class="o">.</span><span class="n">CreateBuffer</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">Buffer</span><span class="o">.</span><span class="n">CreateBuffer</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">buffer</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">EndVector</span><span class="p">()</span>
+<span class="n">RecordBatch</span><span class="o">.</span><span class="n">RecordBatchStart</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">RecordBatch</span><span class="o">.</span><span class="n">RecordBatchAddLength</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">RecordBatch</span><span class="o">.</span><span class="n">RecordBatchAddBuffers</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">buffer</span><span class="p">)</span>
+<span class="n">RecordBatch</span><span class="o">.</span><span class="n">RecordBatchAddNodes</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
+<span class="n">record_batch</span> <span class="o">=</span> <span class="n">RecordBatch</span><span class="o">.</span><span class="n">RecordBatchEnd</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+
+<span class="c1"># construct Message</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageStart</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddBodyLength</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddHeader</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="n">record_batch</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddVersion</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">Message</span><span class="o">.</span><span class="n">MessageAddHeaderType</span><span class="p">(</span><span class="n">builder</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="n">message</span> <span class="o">=</span> <span class="n">Message</span><span class="o">.</span><span class="n">MessageEnd</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+<span class="n">builder</span><span class="o">.</span><span class="n">Finish</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+<span class="c1"># Arrow data array (padded to 8 bytes) appended to end of message - 1,0,0,0,0,0,0,0 in this example</span>
+</pre></div>
+</div>
+<p>Streaming columnar data can be an efficient way to transmit large datasets to columnar analytics tools using small chunks. Data services using row-oriented storage can transpose and stream small data chunks that are more friendly to your CPU’s L2 and L3 caches and your machine’s RAM.</p>
+<p><strong>Unexpected TIL:</strong> The message format allows for Arrow record batches to be compressed (with LZ4 or ZSTD)! It’s not necessarily correct to say that there is no serialisation of the Arrow data arrays with Arrow IPC. I believe that this affects the ‘zero-copy’ philosophy that underpins much of Arrow (although I need to confirm this). In practice, I am not sure how often this compression option is used for Arrow IPC.</p>
+</section>
+</section>
+<section id="file-format">
+<h2>File Format<a class="headerlink" href="#file-format" title="Permalink to this heading">#</a></h2>
+<p>(<strong>Note:</strong> <em>The following three paragraphs are taken directly from Arrow documentation</em>)</p>
+<p>Serialisation can be used synchronously between processes using the Arrow “stream format”, or asynchronously by first persisting data on storage using the Arrow “file format”.</p>
+<ul class="simple">
+<li><p>streaming format: for sending an arbitrary length sequence of record batches. The format must be processed from start to end, and does not support random access.</p></li>
+<li><p>file or random access format: for serializing a fixed number of record batches. Supports random access, and thus is very useful when used with memory maps</p></li>
+</ul>
+<p>The file format starts and ends with a magic string <code class="docutils literal notranslate"><span class="pre">ARROW1</span></code> (plus padding). What follows in the file is identical to the stream format. At the end of the file, there is a footer containing a redundant copy of the schema (which is a part of the streaming format) plus memory offsets and sizes for each of the data blocks in the file. This enables random access to any record batch in the file. See <code class="docutils literal notranslate"><span class="pre">File.fbs</span></code> for the precise details of the file footer. Schematically we have:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">magic</span> <span class="n">number</span> <span class="s2">&quot;ARROW1&quot;</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">empty</span> <span class="n">padding</span> <span class="nb">bytes</span> <span class="p">[</span><span class="n">to</span> <span class="mi">8</span> <span class="n">byte</span> <span class="n">boundary</span><span class="p">]</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">STREAMING</span> <span class="n">FORMAT</span> <span class="k">with</span> <span class="n">EOS</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">FOOTER</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">FOOTER</span> <span class="n">SIZE</span><span class="p">:</span> <span class="n">int32</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">magic</span> <span class="n">number</span> <span class="s2">&quot;ARROW1&quot;</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Some things to keep in mind when comparing the Arrow IPC file format and the Parquet format:</p>
+<ul class="simple">
+<li><p>Parquet is designed for long-term storage and archival purposes, meaning if you write a file today, you can expect that any system that says they can “read Parquet” will be able to read the file in 5 years or 10 years. While the Arrow on-disk format is stable and will be readable by future versions of the libraries, it does not prioritize the requirements of long-term archival storage.</p></li>
+<li><p>Reading Parquet files generally requires efficient yet relatively complex decoding, while reading Arrow IPC files does not involve any decoding because the on-disk representation is the same as the in-memory representation.</p></li>
+<li><p>Parquet files are often much smaller than Arrow IPC files because of the columnar data compression strategies that Parquet uses. If your disk storage or network is slow, Parquet may be a better choice even for short-term storage or caching.</p></li>
+</ul>
+<a class="reference internal image-reference" href="../_images/arrow_file_formats.png"><img alt="test case 2" src="../_images/arrow_file_formats.png" style="width: 900px;" /></a>
+<p><em>Side-by-side schematics of the Arrow streaming and file protocols</em></p>
+</section>
+</section>
+
+<div class="section ablog__blog_comments">
+  
+  
+
+
+<div class="section ablog__prev-next">
+  <span class="ablog__prev">
+    
+    
+    <a href="fragile_tests.html">
+      
+      <i class="fa fa-arrow-circle-left"></i>
+      
+      <span>Fragile Tests</span>
+    </a>
+    
+  </span>
+  <span class="ablog__spacer">&nbsp;</span>
+  <span class="ablog__next">
+    
+  </span>
+</div>
+
+  
+  
+</div>
+
+            </article>
+            
+
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="nenb/nenb.github.io"
+        data-repo-id="R_kgDOI8t5Fw"
+        data-category="Blog comments"
+        data-category-id="DIC_kwDOI8t5F84CUKjn"
+        data-mapping="pathname"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-theme="preferred_color_scheme"
+        data-lang="en"
+        crossorigin="anonymous"
+        async>
+</script>
+
+
+
+
+            
+            
+            <footer class="bd-footer-article">
+                <!-- Previous / next buttons -->
+<div class='prev-next-area'>
+</div>
+            </footer>
+            
+          </div>
+          
+          
+          
+          
+        </div>
+        <footer class="bd-footer-content">
+          <div class="bd-footer-content__inner">
+            
+          </div>
+        </footer>
+        
+      </main>
+    </div>
+  </div>
+
+  
+    
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=796348d33e8b1d947c94"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=796348d33e8b1d947c94"></script>
+
+  <footer class="bd-footer"><div class="bd-footer__inner container">
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">
+        PyData Sphinx Theme
+    </a>
+    0.12.0.
+</p>
+  </div>
+  
+  <div class="footer-item">
+    
+<p class="sphinx-version">
+Created using <a href="http://sphinx-doc.org/">Sphinx</a> 5.3.0.<br>
+</p>
+
+  </div>
+  
+</div>
+  </footer>
+  </body>
+</html>

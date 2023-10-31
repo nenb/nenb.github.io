@@ -11,7 +11,7 @@ date: 2023-10-11
 
 I often find myself drawn to content discussing trade-offs behind some program design. Recently I've been reading about the design decisions behind the Apache Arrow Flight framework, and also behind the file format for SQLite. 
 
-What I found interesting about Flight is that it offers the possibility of almost no serialization costs - data is sent directly over the wire in the native Arrow format, and it's only the comparatively small metadata that is serialized via the Protocol Buffer format. There is a trade-off here between increased network costs and reduced CPU costs.
+What I found interesting about Flight is that it offers the possibility of almost no serialization costs - data is sent directly over the wire in the native Arrow format, and it's only the comparatively small metadata that is serialized via the Protocol Buffer and Flatbuffer formats. There is a trade-off here between increased network costs and reduced CPU costs.
 
 Protocol Buffers were actually designed with the opposite trade-offs in mind. They use a variable-length integer (or 'varint') encoding for integers. This results in less data to transfer over the network, but at the cost of extra CPU work at both ends of the network connection. Interestingly, this decision was reversed for the Cap'n Proto format (a successor to the Protocol Buffer format), as the author considered the trade-off to no longer be [desirable](https://stackoverflow.com/a/24642169).
 

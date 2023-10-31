@@ -362,6 +362,12 @@
   
   
   <li>
+    <a href="arrow_ipc.html">
+      31 October - Apache Arrow IPC
+    </a>
+  </li>
+  
+  <li>
     <a href="fragile_tests.html">
       16 October - Fragile Tests
     </a>
@@ -380,7 +386,7 @@
   
   
   <li>
-    <a href="2023.html">2023 (2)</a>
+    <a href="2023.html">2023 (3)</a>
   </li>
   
   
@@ -422,7 +428,7 @@
 <section id="variable-length-integer-encoding">
 <h2>Variable-length integer encoding<a class="headerlink" href="#variable-length-integer-encoding" title="Permalink to this heading">#</a></h2>
 <p>I often find myself drawn to content discussing trade-offs behind some program design. Recently I’ve been reading about the design decisions behind the Apache Arrow Flight framework, and also behind the file format for SQLite.</p>
-<p>What I found interesting about Flight is that it offers the possibility of almost no serialization costs - data is sent directly over the wire in the native Arrow format, and it’s only the comparatively small metadata that is serialized via the Protocol Buffer format. There is a trade-off here between increased network costs and reduced CPU costs.</p>
+<p>What I found interesting about Flight is that it offers the possibility of almost no serialization costs - data is sent directly over the wire in the native Arrow format, and it’s only the comparatively small metadata that is serialized via the Protocol Buffer and Flatbuffer formats. There is a trade-off here between increased network costs and reduced CPU costs.</p>
 <p>Protocol Buffers were actually designed with the opposite trade-offs in mind. They use a variable-length integer (or ‘varint’) encoding for integers. This results in less data to transfer over the network, but at the cost of extra CPU work at both ends of the network connection. Interestingly, this decision was reversed for the Cap’n Proto format (a successor to the Protocol Buffer format), as the author considered the trade-off to no longer be <a class="reference external" href="https://stackoverflow.com/a/24642169">desirable</a>.</p>
 <p>SQLite uses a varint encoding for its own file format. SQLite is widely used across embedded devices, and so storage costs are also an important consideration in this design decision. However, most of my projects with SQLite don’t take place on systems where storage is at such a premium, and I was interested in getting a rough idea about what sort of trade-offs might be involved for my own use-cases.</p>
 <p>🚨 <strong>Warning: What follows is a brief and somewhat naive analysis of varint encoding costs in SQLite. Please take it with a healthy pinch of salt!</strong> 🚨</p>
