@@ -1,6 +1,6 @@
 # Articles
 
-```{postlist} 3
+```{postlist}
 ---
 format: "{title}"
 excerpts: True
